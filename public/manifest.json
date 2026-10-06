@@ -1,0 +1,19 @@
+{
+  "short_name": "RepFlow",
+  "name": "RepFlow - The Offline-First Pharmaceutical Field Force Operating System",
+  "description": "The Offline-First Pharmaceutical Field Force Operating System for Medical Representatives and Pharma Management.",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300b4d8'/><text x='50' y='65' font-size='45' font-weight='800' fill='white' text-anchor='middle' font-family='sans-serif'>RF</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#070f1e",
+  "theme_color": "#0d1b2a",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/"
+}

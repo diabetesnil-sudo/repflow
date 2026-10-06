@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RepFlow - The Offline-First Pharmaceutical Field Force Operating System</title>
+  <meta name="description" content="The Offline-First Pharmaceutical Field Force Operating System for Medical Representatives and Pharma Management Hierarchy.">
+  <meta name="theme-color" content="#070f1e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="/js/sw-register.js" defer></script>
+  <script src="/js/db-client.js" defer></script>
+  <script src="/js/app.js" defer></script>
+  <style>
+    @media print {
+      .app-header, .persona-switcher, .network-bar, .nav-tabs, .btn, .header-controls, .modal-backdrop { display: none !important; }
+      body { background: #ffffff !important; color: #000000 !important; }
+      .panel-card { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; box-shadow: none !important; margin-bottom: 20px !important; }
+      .data-table th, .data-table td { color: #000 !important; border-bottom: 1px solid #ddd !important; }
+      .stat-card { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-wrapper">
+        <div class="brand-logo">RF</div>
+        <div class="brand-info">
+          <h1 id="brandTitle">RepFlow</h1>
+          <div class="brand-tagline">The Offline-First Pharmaceutical Field Force Operating System</div>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <!-- Multi-Tenant SaaS Dynamic Organization Selector -->
+        <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:4px 8px; gap:6px;">
+          <span style="font-size:0.75rem; color:var(--text-muted);">🏢 Tenant:</span>
+          <select id="tenantSelect" style="background:transparent; border:none; color:var(--accent-teal); font-size:0.82rem; font-weight:700; outline:none; cursor:pointer;" onchange="RepFlowApp.switchTenant(this.value)">
+            <option value="1">Loading Tenants...</option>
+          </select>
+        </div>
+
+        <!-- Persona Quick Switcher (6-Tier Hierarchy) -->
+        <div class="persona-switcher">
+          <span style="font-size:0.75rem; color:var(--text-muted); padding:0 6px;">Persona:</span>
+          <button class="persona-btn active" data-role="MR" onclick="RepFlowApp.switchPersona('MR')">Rahul (MR)</button>
+          <button class="persona-btn" data-role="AM" onclick="RepFlowApp.switchPersona('AM')">Vikram (AM)</button>
+          <button class="persona-btn" data-role="RM" onclick="RepFlowApp.switchPersona('RM')">Anita (RM)</button>
+          <button class="persona-btn" data-role="ZSM" onclick="RepFlowApp.switchPersona('ZSM')">Ramesh (ZSM)</button>
+          <button class="persona-btn" data-role="HO" onclick="RepFlowApp.switchPersona('HO')">Priya (HO)</button>
+          <button class="persona-btn" data-role="SUPERADMIN" onclick="RepFlowApp.switchPersona('SUPERADMIN')">SaaS Admin</button>
+        </div>
+
+        <!-- Network Mode Bar & Controls -->
+        <div class="network-bar">
+          <div id="statusDot" class="status-dot"></div>
+          <span id="statusText" class="status-text">Online</span>
+          <span id="syncBadge" class="sync-badge">0 Pending Syncs</span>
+          <button id="pushNotifyBtn" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="RepFlowApp.requestNotificationPermission()">
+            🔔 Push Alerts
+          </button>
+          <button id="offlineToggleBtn" class="toggle-offline-btn" onclick="RepFlowApp.toggleOfflineSim()">
+            ⚡ Simulate Offline
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container & Navigation Tabs -->
+  <main class="app-container">
+    <nav class="nav-tabs" id="navTabs"></nav>
+
+    <!-- ====================================================================
+         TAB: TEAM & HIERARCHY MANAGEMENT DESK (NEW)
+         ==================================================================== -->
+    <section id="tab-team-hierarchy" class="tab-content">
+      <div class="panel-card" style="background: linear-gradient(135deg, rgba(13, 27, 42, 0.95), rgba(0, 180, 216, 0.08));">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">👥 Pharma Organization Team & Hierarchy Management</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);" id="hierarchyOrgSubtext">
+              Active Organization: <strong style="color:var(--accent-teal);" id="hierarchyOrgName">Astra Pharma Ltd.</strong> | Generate Team Members & Align Reporting Lines
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="RepFlowApp.openCreateTeamMemberModal()">+ Add New Team Member</button>
+          </div>
+        </div>
+
+        <!-- Quota & Seat Counter Cards -->
+        <div class="grid-cols-4" style="margin-bottom:20px;">
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-icon">🏢</div>
+            <div class="stat-info">
+              <h4>Head Office (HO)</h4>
+              <div class="stat-value" id="countHoUsers">1 Admin</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-blue);">
+            <div class="stat-icon">👔</div>
+            <div class="stat-info">
+              <h4>ZSM / RM Managers</h4>
+              <div class="stat-value" id="countSeniorManagers">2 Active</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-amber);">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+              <h4>Area Managers (AM)</h4>
+              <div class="stat-value" id="countAmUsers">1 Active</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-icon">💼</div>
+            <div class="stat-info">
+              <h4>Field Medical Reps (MR)</h4>
+              <div class="stat-value" id="countMrUsers">2 Active</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hierarchy Table with Reporting Manager Linkages -->
+        <h3 style="font-size:1.1rem; color:var(--accent-teal); margin-bottom:12px;">📊 Complete Organizational Hierarchy & Reporting Lines</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Employee Name</th>
+                <th>User ID / Login Email</th>
+                <th>Access Password</th>
+                <th>Role / Designation</th>
+                <th>Aligned Reporting Senior</th>
+                <th>Assigned Territory</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="teamHierarchyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 1: MR DASHBOARD
+         ==================================================================== -->
+    <section id="tab-mr-dashboard" class="tab-content active">
+      <div class="panel-card" style="background: linear-gradient(135deg, rgba(13, 27, 42, 0.9), rgba(0, 180, 216, 0.05));">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div>
+            <h2 style="font-size:1.4rem; font-weight:800; color:var(--text-main);">Welcome, Rahul Sharma (Medical Representative)</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">
+              Territory: <strong style="color:var(--accent-teal);">T-GREATER-KAILASH (South Delhi)</strong> | Reporting Manager: <strong>Vikram Singh (AM)</strong>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" onclick="RepFlowApp.openEdetailingModal()">🖥️ Launch E-Detailing</button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.navigateToTab('dcr')">+ New DCR Entry</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-cols-4">
+        <div class="stat-card">
+          <div class="stat-icon">👨‍⚕️</div>
+          <div class="stat-info">
+            <h4>Doctor Calls (Today)</h4>
+            <div class="stat-value">6 / 8</div>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+          <div class="stat-icon">📍</div>
+          <div class="stat-info">
+            <h4>GPS Geo-Fence Status</h4>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--accent-emerald);">VERIFIED IN-CLINIC</div>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent-amber);">
+          <div class="stat-icon">🎒</div>
+          <div class="stat-info">
+            <h4>Low Stock Alerts</h4>
+            <div class="stat-value" id="statLowStock">1 Product</div>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent-blue);">
+          <div class="stat-icon">📈</div>
+          <div class="stat-info">
+            <h4>Target Achievement</h4>
+            <div class="stat-value" id="statAchievement">95.0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="lowStockBanner" class="panel-card" style="border-color:var(--accent-rose); background:rgba(244, 63, 94, 0.08); display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.6rem;">⚠️</span>
+            <div>
+              <strong style="color:var(--accent-rose); font-size:1rem;">Low Inventory Alert in Virtual Sample Bag</strong>
+              <div style="font-size:0.85rem; color:var(--text-muted);">Stock balance for <strong>NeuroFlow-SR Visual Aides</strong> is below minimum threshold.</div>
+            </div>
+          </div>
+          <button class="btn btn-danger" style="font-size:0.8rem; padding:6px 14px;" onclick="RepFlowApp.openInwardStockModal()">Log Stock Receipt</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 2: DAILY CALL REPORTING (DCR) - FULLY FEATURED
+         ==================================================================== -->
+    <section id="tab-dcr" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">📝 Daily Call Reporting (DCR) Log</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Multi-Product Detailing, Dynamic Area Doctor Filtering & CME Activity Logger.</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="RepFlowApp.openCmeCampModal()">⛺ Log CME / Medical Camp</button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.printDcrPdf()">🖨️ Download / Print DCR PDF</button>
+          </div>
+        </div>
+
+        <form id="dcrForm" onsubmit="RepFlowApp.handleDcrSubmit(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>DCR Date</label>
+              <input type="date" id="dcrDate" required class="form-control">
+            </div>
+
+            <!-- Station Type Selection -->
+            <div class="form-group">
+              <label style="color:var(--accent-teal);">Working Station Type</label>
+              <select id="dcrStationType" class="form-select" onchange="RepFlowApp.handleStationTypeChange(this.value)">
+                <option value="HQ">HQ (Headquarters - Saket)</option>
+                <option value="EX-HQ">EX-HQ (Ex-Headquarters - Nehru Place / Okhla)</option>
+                <option value="OUT-STATION">OUT-STATION (Far Distance / Outstation)</option>
+              </select>
+            </div>
+
+            <!-- Area Worked & Dynamic Doctor Filter -->
+            <div class="form-group">
+              <label style="color:var(--accent-teal);">Area Worked (Filters Doctor List)</label>
+              <select id="dcrAreaWorked" class="form-select" onchange="RepFlowApp.handleAreaWorkedChange(this.value)">
+                <option value="Saket">Saket (Max Hospital & Clinics)</option>
+                <option value="Nehru Place">Nehru Place (Fortis & Apollo OPD)</option>
+                <option value="Green Park">Green Park Market</option>
+                <option value="AIIMS OPD">AIIMS OPD Block</option>
+                <option value="ALL">ALL Areas (Entire Territory)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Working Mode</label>
+              <select id="dcrWorkingType" class="form-select" onchange="RepFlowApp.toggleJointWorking(this.value)">
+                <option value="INDEPENDENT">Independent Working</option>
+                <option value="JOINT">Joint Working with Senior Manager</option>
+              </select>
+            </div>
+
+            <!-- Expanded Joint Manager Roles -->
+            <div class="form-group" id="jointManagerGroup" style="display:none;">
+              <label>Joint Working Senior Manager Role</label>
+              <select id="dcrJointRole" class="form-select">
+                <option value="AM">Vikram Singh (Area Manager - AM)</option>
+                <option value="RM">Anita Sharma (Regional Sales Manager - RM)</option>
+                <option value="ZSM">Ramesh Gupta (Zonal Sales Manager - ZSM)</option>
+                <option value="PM">Product Manager (HO Brand Team)</option>
+                <option value="MM">Marketing Manager (HO Sales Team)</option>
+                <option value="HO_EXEC">Head Office Senior Executive</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Doctor Visits Container -->
+          <div style="margin-top:20px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:1.1rem; color:var(--accent-teal);">👨‍⚕️ Doctor Calls Log (Filtered for Area: <span id="activeAreaLabel" style="color:#ffffff; font-weight:700;">Saket</span>)</h3>
+            <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:0.8rem;" onclick="RepFlowApp.addDoctorCallEntry()">+ Add Doctor Call</button>
+          </div>
+          <div id="doctorCallsContainer"></div>
+
+          <!-- Chemist Visits Container -->
+          <div style="margin-top:24px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:1.1rem; color:var(--accent-teal);">🧪 Chemist Calls & POB Collection</h3>
+            <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:0.8rem;" onclick="RepFlowApp.addChemistCallEntry()">+ Add Chemist Visit</button>
+          </div>
+          <div id="chemistCallsContainer"></div>
+
+          <div style="margin-top:24px; display:flex; justify-content:flex-end; gap:12px;">
+            <button type="submit" class="btn btn-primary" style="padding:14px 32px; font-size:1rem;">🚀 Submit DCR Log</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 3: MONTHLY TOUR PROGRAM (MTP)
+         ==================================================================== -->
+    <section id="tab-mtp" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🗓️ Monthly Tour Program (MTP) Planning Calendar</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Plan tour schedule well in advance. Approved leaves automatically block calendar dates.</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="RepFlowApp.printMtpPdf()">🖨️ Download / Print MTP PDF</button>
+            <button class="btn btn-primary" onclick="RepFlowApp.submitMonthMtp()">Submit MTP to Manager</button>
+          </div>
+        </div>
+
+        <div id="calendarGrid" class="grid-cols-4"></div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 4: MASTER DIRECTORY
+         ==================================================================== -->
+    <section id="tab-master" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🏥 Master Data Directory (Doctors, Chemists, Stockists)</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">View Doctor, Chemist & Stockist master records with full contact details & area names.</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="RepFlowApp.openAddDoctorModal()">+ Add New Doctor</button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.openAddDistributorModal()">+ Add Distributor</button>
+          </div>
+        </div>
+
+        <h3 style="font-size:1.1rem; color:var(--accent-teal); margin-bottom:12px;">👨‍⚕️ Doctors Master List</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Doctor Name</th>
+                <th>Specialty</th>
+                <th>Category</th>
+                <th>Area Name</th>
+                <th>Clinic Address</th>
+                <th>Contact Phone / Email</th>
+                <th>Rx Potential</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="doctorsTableBody"></tbody>
+          </table>
+        </div>
+
+        <h3 style="font-size:1.1rem; color:var(--accent-teal); margin-top:28px; margin-bottom:12px;">🏢 Stockist / Distributor Firms List</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Distributor Firm Name</th>
+                <th>Contact Person</th>
+                <th>Phone / Email</th>
+                <th>GSTIN</th>
+                <th>Drug License No</th>
+                <th>Area Name</th>
+              </tr>
+            </thead>
+            <tbody id="distributorsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 5: PHARMA INDUSTRY EXPENSE CLAIM ENGINE
+         ==================================================================== -->
+    <section id="tab-expenses" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">💰 Pharma Industry Expense Claims (DA / TA / Hotel Engine)</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Standard Pharma DA (HQ: ₹350, EX-HQ: ₹650, Outstation: ₹1200) + TA (Per KM / Ticket) + Hotel Stay.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openSubmitExpenseModal()">+ Submit Expense Claim</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Claimant</th>
+                <th>Station Type</th>
+                <th>DA (Fixed)</th>
+                <th>TA Mode & Fare</th>
+                <th>Hotel Stay</th>
+                <th>Total Claim</th>
+                <th>Approved Amount</th>
+                <th>Status</th>
+                <th>Correction Reason / Remarks</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expensesTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 6: LEAVE MANAGEMENT
+         ==================================================================== -->
+    <section id="tab-leaves" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🌴 Leave Management & MTP Synchronization</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Track CL/SL/EL balances and request leave. Approved dates auto-block MTP calendar.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openApplyLeaveModal()">+ Apply for Leave</button>
+        </div>
+
+        <div class="grid-cols-3">
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-icon">🏖️</div>
+            <div class="stat-info">
+              <h4>Casual Leave (CL)</h4>
+              <div class="stat-value" id="clBalanceVal">9 Days</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-amber);">
+            <div class="stat-icon">🏥</div>
+            <div class="stat-info">
+              <h4>Sick Leave (SL)</h4>
+              <div class="stat-value" id="slBalanceVal">10 Days</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-icon">✈️</div>
+            <div class="stat-info">
+              <h4>Earned Leave (EL)</h4>
+              <div class="stat-value" id="elBalanceVal">15 Days</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Submitted Date</th>
+                <th>Applicant</th>
+                <th>Leave Type</th>
+                <th>Date Range</th>
+                <th>Total Days</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="leavesTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 7: VIRTUAL SAMPLE BAG
+         ==================================================================== -->
+    <section id="tab-sample-bag" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🎒 Virtual Sample Bag & Promotional Inventory</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Track physical stock held by MR. Log inward stock receipts to increment balance.</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="RepFlowApp.openInwardStockModal()">+ Receive / Inward Stock</button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.restockSampleBag()">🔄 Quick Restock</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Product / Brand Input Name</th>
+                <th>Item Type</th>
+                <th>Batch Number</th>
+                <th>Allocated Qty</th>
+                <th>Current Stock Qty</th>
+                <th>Threshold</th>
+                <th>Stock Alert Status</th>
+              </tr>
+            </thead>
+            <tbody id="sampleBagTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 8: GIFT LEDGER
+         ==================================================================== -->
+    <section id="tab-gifts" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🎁 Promotional Inputs & Gift Distribution Ledger</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Log high-value gifts, textbooks & diagnostic kits distributed to doctors.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openDistributeGiftModal()">+ Log Gift Distribution</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Doctor Name</th>
+                <th>Specialty</th>
+                <th>Valuable Gift / Input Name</th>
+                <th>Quantity</th>
+                <th>Estimated Value</th>
+              </tr>
+            </thead>
+            <tbody id="giftsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 9: E-DETAILING VISUAL AIDE PAGE
+         ==================================================================== -->
+    <section id="tab-edetailing" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🖥️ Interactive E-Detailing Visual Aide Deck & Upload Manager</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Present clinical trial slides or upload new product visual aides.</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="RepFlowApp.openUploadSlideModal()">📤 Upload Custom Product Slide</button>
+            <button class="btn btn-primary" onclick="RepFlowApp.openEdetailingModal()">▶️ Launch Fullscreen Deck</button>
+          </div>
+        </div>
+
+        <div class="grid-cols-2" id="edetailingDecksContainer">
+          <div class="item-card" style="border-left:4px solid var(--accent-teal);">
+            <h3 style="color:var(--accent-teal);">Cardia-90 10mg Catch Covers</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">Phase III Trial Results & Bioavailability Decks</p>
+            <button class="btn btn-secondary" style="margin-top:12px; font-size:0.8rem;" onclick="RepFlowApp.openEdetailingModal()">Play Presentation</button>
+          </div>
+          <div class="item-card" style="border-left:4px solid var(--accent-emerald);">
+            <h3 style="color:var(--accent-emerald);">Glicla-M SR Starter Packs</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">Dual Action Sustained-Release Glycemic Control Presentation</p>
+            <button class="btn btn-secondary" style="margin-top:12px; font-size:0.8rem;" onclick="RepFlowApp.openEdetailingModal()">Play Presentation</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 10: TARGET VS SALES ANALYTICS
+         ==================================================================== -->
+    <section id="tab-analytics" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">📈 Productwise Primary, Secondary Sales & YoY Growth Engine</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Track Target vs Secondary Sales achievement and generate printable PDF reports.</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="RepFlowApp.openUploadSalesDataModal()">📤 Entry / Upload Target & Sales</button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.printSalesReportPdf()">🖨️ Download / Print Sales Report PDF</button>
+          </div>
+        </div>
+
+        <div class="grid-cols-3">
+          <div class="stat-card">
+            <div class="stat-info">
+              <h4>Annual Target</h4>
+              <div class="stat-value" id="targetAmountVal">₹12,00,000</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-info">
+              <h4>Primary Sales</h4>
+              <div class="stat-value" id="primarySalesVal">₹10,80,000</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-info">
+              <h4>YoY Growth % (Vs Last Year)</h4>
+              <div class="stat-value" style="color:var(--accent-emerald);">+18.75% YoY</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:14px;">Productwise Secondary Sales vs Target & YoY Comparison</h3>
+        <div id="productSalesBreakdown"></div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 11: ACADEMIC ROI
+         ==================================================================== -->
+    <section id="tab-academic-roi" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🔬 Academic Activity & Doctor Investment RoI Ledger</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Track CME sponsorships, research grants, and consultancy fees against prescription yields.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openAddRoiModal()">+ Log Investment Proposal</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Doctor Name</th>
+                <th>Specialty</th>
+                <th>Activity Type</th>
+                <th>Investment Amount</th>
+                <th>Expected Monthly Rx</th>
+                <th>Actual Monthly Rx</th>
+                <th>Yield RoI %</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="roiTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 12: AM DESK
+         ==================================================================== -->
+    <section id="tab-am-dashboard" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">👔 Area Manager (AM) Field DCR & Team Approvals Desk</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Vikram Singh (AM South Delhi). Log AM field calls & review team MTPs.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openAmDcrModal()">+ Log AM Field DCR</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 13: RM PORTAL
+         ==================================================================== -->
+    <section id="tab-rm-portal" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">👔 Regional Manager (RM) Regional Operations Portal</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Anita Sharma (RM Delhi NCR). Log joint DCRs & compile Regional RoI.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openRmJointDcrModal()">+ Log RM Joint Field Call</button>
+        </div>
+
+        <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:14px;">Regional Academic Investment RoI Compilation</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Area Manager</th>
+                <th>Territory Code</th>
+                <th>Total Area Investment</th>
+                <th>Rx Yield Generated</th>
+                <th>Regional RoI %</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rmRoiTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 14: ZSM PORTAL
+         ==================================================================== -->
+    <section id="tab-zsm-portal" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2 class="panel-title">🏆 Zonal Sales Manager (ZSM) Operations Portal</h2>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Region Name</th>
+                <th>Regional Manager</th>
+                <th>Zonal Investment</th>
+                <th>Zonal Rx Yield</th>
+                <th>Zonal RoI %</th>
+              </tr>
+            </thead>
+            <tbody id="zsmRoiTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 15: HO YIELD ANALYTICS
+         ==================================================================== -->
+    <section id="tab-ho-yield-analytics" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2 class="panel-title">📊 Head Office Investment Yield & Strategy Analytics</h2>
+        </div>
+        <div id="hoYieldChartContainer"></div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 16: HO MASTER & EXCEL BULK UPLOADER
+         ==================================================================== -->
+    <section id="tab-ho-dashboard" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2 class="panel-title">🏢 Head Office Master Data & Excel Bulk Import Desk</h2>
+        </div>
+
+        <div style="background:rgba(0, 180, 216, 0.08); border:2px dashed var(--accent-teal); border-radius:var(--radius-lg); padding:30px; text-align:center; margin-bottom:24px;">
+          <h3 style="color:var(--accent-teal); margin-bottom:8px;">📊 Drag & Drop Excel Sheet (.xlsx / .csv) for Bulk Master Upload</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">Bulk import Doctors, Chemists, Distributors, or Annual Targets directly into RepFlow.</p>
+          <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="document.getElementById('excelFileInput').click()">📤 Select Excel / CSV File</button>
+            <a href="/api/master/template/doctors" class="btn btn-secondary" target="_blank">⬇️ Download Doctor Template</a>
+          </div>
+          <input type="file" id="excelFileInput" style="display:none;" accept=".csv,.xlsx" onchange="RepFlowApp.handleExcelFileSelect(event)">
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TAB 17: SUPER-ADMIN PORTAL & SAAS BILLING
+         ==================================================================== -->
+    <section id="tab-superadmin" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">⚡ RepFlow SaaS Super-Admin Portal & Subscription Billing</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Manage multi-tenant Pharma organizations, generate Tenant Admin accounts, and track subscriptions.</div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openOnboardTenantModal()">+ Onboard New Pharma Tenant</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Pharma Company</th>
+                <th>Slug Identifier</th>
+                <th>Plan Tier</th>
+                <th>MR Seats</th>
+                <th>AM Seats</th>
+                <th>Monthly Subscription</th>
+                <th>Billing Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="superadminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ALL APPLICATION MODALS -->
+
+  <!-- Modal 1: Super Admin Onboard New Tenant Modal with Admin Credentials -->
+  <div id="onboardTenantModal" class="modal-backdrop">
+    <div class="modal-content" style="max-width:650px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🏢 Onboard New Pharma Tenant & Generate Admin</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeOnboardTenantModal()">✕</button>
+      </div>
+      <form id="onboardTenantForm" onsubmit="RepFlowApp.handleOnboardTenantSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pharma Company Name</label>
+            <input type="text" id="tenantCompanyName" required placeholder="e.g. Uniexcel Medicare Pvt Ltd" class="form-control" oninput="RepFlowApp.autoFillAdminCredentials(this.value)">
+          </div>
+          <div class="form-group">
+            <label>Company Slug / Identifier</label>
+            <input type="text" id="tenantSlug" required placeholder="uniexcel-medicare" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Subscription Plan Tier</label>
+            <select id="tenantPlanTier" class="form-select">
+              <option value="ENTERPRISE">ENTERPRISE Plan (Unlimited Sync & Storage)</option>
+              <option value="PRO">PRO Plan (Up to 50 Field Users)</option>
+              <option value="STARTER">STARTER Plan (Up to 15 Field Users)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Monthly Subscription Price (₹)</label>
+            <input type="number" id="tenantMonthlyPrice" required value="49999" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Max MR User Seats</label>
+            <input type="number" id="tenantMaxMrSeats" required value="50" min="5" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Max Manager (AM/RM/ZSM) Seats</label>
+            <input type="number" id="tenantMaxAmSeats" required value="10" min="2" class="form-control">
+          </div>
+        </div>
+
+        <!-- Tenant Admin Credentials Generation Box -->
+        <div style="background:rgba(0, 180, 216, 0.08); border:1px solid var(--accent-teal); border-radius:var(--radius-md); padding:16px; margin-top:10px; margin-bottom:10px;">
+          <h4 style="color:var(--accent-teal); margin-bottom:8px; font-size:0.95rem;">🔑 Generated Tenant Head Office (HO) Admin Account</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tenant Admin Full Name</label>
+              <input type="text" id="tenantAdminName" required placeholder="e.g. Dr. R. K. Patel" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>Admin User ID / Login Email</label>
+              <input type="email" id="tenantAdminEmail" required placeholder="admin@uniexcel.com" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Initial Login Password</label>
+            <input type="text" id="tenantAdminPassword" required value="Uniexcel@2026" class="form-control">
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeOnboardTenantModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Onboard Organization & Create Admin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 1b: Onboarding Credentials Confirmation Modal -->
+  <div id="tenantCreatedSuccessModal" class="modal-backdrop">
+    <div class="modal-content" style="max-width:550px; text-align:center;">
+      <div style="font-size:3rem; margin-bottom:10px;">🎉</div>
+      <h2 style="color:var(--accent-teal); font-size:1.4rem; margin-bottom:8px;">Tenant Successfully Onboarded!</h2>
+      <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:18px;">
+        <strong id="createdTenantName" style="color:#ffffff;"></strong> is now live in RepFlow SaaS.
+      </p>
+
+      <div style="background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:16px; text-align:left; margin-bottom:20px;">
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">🏢 Organization ID: <strong id="createdTenantId" style="color:var(--accent-teal);"></strong></div>
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">👤 Tenant Admin: <strong id="createdAdminName" style="color:#ffffff;"></strong></div>
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">📧 Login User ID: <code id="createdAdminEmail" style="color:var(--accent-emerald); font-weight:700;"></code></div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">🔑 Access Password: <code id="createdAdminPassword" style="color:var(--accent-amber); font-weight:700;"></code></div>
+      </div>
+
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button class="btn btn-primary" onclick="RepFlowApp.switchAndManageCreatedTenant()">Switch to Tenant & Build Team</button>
+        <button class="btn btn-secondary" onclick="RepFlowApp.closeTenantSuccessModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 1c: Create Team Member & Hierarchy Alignment Modal -->
+  <div id="createTeamMemberModal" class="modal-backdrop">
+    <div class="modal-content" style="max-width:600px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>👥 Generate & Align New Team Member</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeCreateTeamMemberModal()">✕</button>
+      </div>
+      <form id="createTeamMemberForm" onsubmit="RepFlowApp.handleCreateTeamMemberSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Employee Full Name</label>
+            <input type="text" id="teamUserName" required placeholder="e.g. Suresh Kumar" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Designation / Role</label>
+            <select id="teamUserRole" class="form-select" onchange="RepFlowApp.handleRoleChangeForManagers(this.value)">
+              <option value="MR">Medical Representative (MR)</option>
+              <option value="AM">Area Manager (AM)</option>
+              <option value="RM">Regional Sales Manager (RM)</option>
+              <option value="ZSM">Zonal Sales Manager (ZSM)</option>
+              <option value="HO">Head Office Admin (HO)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Login User ID / Email</label>
+            <input type="email" id="teamUserEmail" required placeholder="suresh.mr@uniexcel.com" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Access Password</label>
+            <input type="text" id="teamUserPassword" required value="repflow@123" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group" id="reportingManagerGroup">
+          <label style="color:var(--accent-teal);">Aligned Reporting Senior Manager</label>
+          <select id="teamUserReportingManager" class="form-select"></select>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Each field rep must report to their respective senior in the hierarchy.</div>
+        </div>
+
+        <div class="form-group">
+          <label>Assigned Territory / Headquarters Code</label>
+          <input type="text" id="teamUserTerritory" required placeholder="e.g. T-GREATER-KAILASH, A-SOUTH-DELHI, R-DELHI-NCR" class="form-control">
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeCreateTeamMemberModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Member & Align Hierarchy</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 2: Log CME / Medical Camp Activity -->
+  <div id="logCmeCampModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>⛺ Log Doctor CME / Medical Health Camp Activity</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeCmeCampModal()">✕</button>
+      </div>
+      <form id="cmeCampForm" onsubmit="RepFlowApp.handleCmeCampSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Activity Category</label>
+            <select id="cmeActivityType" class="form-select">
+              <option value="CME">Doctor CME / Clinical Seminar</option>
+              <option value="Medical Camp">Medical Health Checkup Camp</option>
+              <option value="Product Launch">Product Launch Group Meeting</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Date of Event</label>
+            <input type="date" id="cmeDate" required class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>CME / Camp Title</label>
+          <input type="text" id="cmeTitle" required placeholder="Cardia-90 Clinical Trial Symposium" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Venue / Hospital Location</label>
+          <input type="text" id="cmeVenue" required placeholder="Hotel Crowne Plaza, Saket" class="form-control">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Doctor Attendance Count</label>
+            <input type="number" id="cmeDoctorCount" required value="15" min="1" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Activity Expense Amount (₹)</label>
+            <input type="number" id="cmeExpenseAmt" required value="18000" class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeCmeCampModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save CME Activity Log</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 3: Upload Custom E-Detailing Slide -->
+  <div id="uploadSlideModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>📤 Upload Custom Product E-Detailing Slide</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeUploadSlideModal()">✕</button>
+      </div>
+      <form id="uploadSlideForm" onsubmit="RepFlowApp.handleUploadSlideSubmit(event)">
+        <div class="form-group">
+          <label>Target Product</label>
+          <select id="slideProductName" class="form-select">
+            <option value="Cardia-90 10mg Catch Covers">Cardia-90 10mg Catch Covers</option>
+            <option value="Glicla-M SR Starter Packs">Glicla-M SR Starter Packs</option>
+            <option value="NeuroFlow-SR Visual Aides">NeuroFlow-SR Visual Aides</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Slide Title</label>
+          <input type="text" id="slideTitleInput" required placeholder="Phase-IV Post Marketing Surveillance Data" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Slide Subtitle & Clinical Key Takeaway</label>
+          <input type="text" id="slideSubtitleInput" placeholder="94% Patient Satisfaction Rate" class="form-control">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Slide Sequence Number</label>
+            <input type="number" id="slideSequenceInput" value="3" min="1" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Slide Key Highlight Tag</label>
+            <input type="text" id="slideHighlightInput" value="P < 0.001 Significance" class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeUploadSlideModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Upload & Add to Product Deck</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 4: Add Distributor / Stockist Firm -->
+  <div id="addDistributorModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🏢 Register New Distributor / Stockist Firm</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeAddDistributorModal()">✕</button>
+      </div>
+      <form id="addDistributorForm" onsubmit="RepFlowApp.handleAddDistributorSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Distributor Firm Name</label>
+            <input type="text" id="dstName" required placeholder="Delhi Pharma Distributors Pvt Ltd" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Contact Person</label>
+            <input type="text" id="dstContactPerson" required placeholder="Rakesh Sharma (Manager)" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="text" id="dstPhone" required placeholder="+91 11 2649 1000" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="dstEmail" placeholder="orders@distributor.com" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>GSTIN</label>
+            <input type="text" id="dstGstin" required placeholder="07AAAAA0000A1Z5" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Drug License Number</label>
+            <input type="text" id="dstDrugLicense" required placeholder="DL-2026-DEL-101" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Area / Market Name</label>
+          <select id="dstAreaName" class="form-select">
+            <option value="Saket">Saket</option>
+            <option value="Nehru Place">Nehru Place</option>
+            <option value="Green Park">Green Park</option>
+            <option value="AIIMS OPD">AIIMS OPD</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAddDistributorModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Distributor Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 5: Pharma Industry DA/TA Expense Claim -->
+  <div id="submitExpenseModal" class="modal-backdrop">
+    <div class="modal-content" style="max-width:650px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>💰 Submit Pharma Expense Claim (DA + TA + Hotel)</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeSubmitExpenseModal()">✕</button>
+      </div>
+      <form id="submitExpenseForm" onsubmit="RepFlowApp.handleSubmitExpense(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Expense Date</label>
+            <input type="date" id="expDate" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Working Station Type</label>
+            <select id="expStationType" class="form-select" onchange="RepFlowApp.calculateExpenseTotal()">
+              <option value="HQ">HQ (Daily Allowance: ₹350/day)</option>
+              <option value="EX-HQ">EX-HQ (Daily Allowance: ₹650/day)</option>
+              <option value="OUT-STATION">OUT-STATION (Daily Allowance: ₹1,200/day)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="background:rgba(0, 180, 216, 0.08); border:1px solid var(--accent-teal); border-radius:var(--radius-md); padding:12px; margin-bottom:16px;">
+          <div style="font-size:0.85rem; color:var(--accent-teal); font-weight:700;">Fixed DA Auto-Calculated: <span id="daPreviewText" style="color:#ffffff;">₹350 / day</span></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Travel Allowance (TA) Mode</label>
+            <select id="expTaMode" class="form-select" onchange="RepFlowApp.handleTaModeChange(this.value)">
+              <option value="PER_KM">Per KM Fare (Local EX-HQ @ ₹6.00 / km)</option>
+              <option value="TICKET_REIMBURSEMENT">Long Distance (2nd AC Train / Bus Ticket)</option>
+            </select>
+          </div>
+          <div class="form-group" id="taKmGroup">
+            <label>Total KMs Travelled</label>
+            <input type="number" id="expKms" value="40" min="0" class="form-control" oninput="RepFlowApp.calculateExpenseTotal()">
+          </div>
+          <div class="form-group" id="taTicketGroup" style="display:none;">
+            <label>Ticket Reimbursement Amount (₹)</label>
+            <input type="number" id="expTicketAmt" value="1450" min="0" class="form-control" oninput="RepFlowApp.calculateExpenseTotal()">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Hotel Stay Bill Reimbursement (Outstation / Senior Roles)</label>
+          <input type="number" id="expHotelAmt" value="0" min="0" class="form-control" oninput="RepFlowApp.calculateExpenseTotal()">
+        </div>
+
+        <div style="background:linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(0, 180, 216, 0.1)); border:1px solid var(--accent-emerald); border-radius:var(--radius-md); padding:14px; text-align:center; margin-bottom:16px;">
+          <div style="font-size:0.9rem; color:var(--text-muted);">Total Claimable Reimbursement:</div>
+          <div id="totalClaimCalculatedText" style="font-size:1.6rem; font-weight:800; color:var(--accent-emerald);">₹590.00</div>
+        </div>
+
+        <div class="form-group">
+          <label>PWA Camera Receipt / Ticket Upload</label>
+          <div class="camera-preview-box" onclick="RepFlowApp.triggerCameraCapture()">
+            <span style="font-size:1.8rem;">📷</span>
+            <span id="receiptStatusText" style="font-size:0.85rem; margin-top:4px;">Click to Snap or Select Ticket/Receipt Image</span>
+          </div>
+          <input type="file" id="receiptFileInput" accept="image/*" capture="environment" style="display:none;" onchange="RepFlowApp.handleReceiptFileSelect(event)">
+        </div>
+
+        <div class="form-group">
+          <label>Remarks & Purpose</label>
+          <input type="text" id="expRemarks" class="form-control" placeholder="EX-HQ travel for doctor visits in Okhla">
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeSubmitExpenseModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit Claim</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 6: Expense Correction Modal for Managers -->
+  <div id="expenseCorrectionModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>⚖️ Expense Claim Review & Discrepancy Correction</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeCorrectionModal()">✕</button>
+      </div>
+      <form id="expenseCorrectionForm" onsubmit="RepFlowApp.handleExpenseCorrectionSubmit(event)">
+        <input type="hidden" id="correctExpId">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Original Claimed Amount</label>
+            <input type="text" id="correctOriginalAmt" readonly class="form-control" style="opacity:0.7;">
+          </div>
+          <div class="form-group">
+            <label>Manager Approved Amount (₹)</label>
+            <input type="number" id="correctApprovedAmt" required class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="color:var(--accent-amber);">Mandatory Reason for Correction</label>
+          <textarea id="correctReason" rows="3" class="form-control" placeholder="Hotel allowance cap is ₹3,000 as per company travel policy..."></textarea>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeCorrectionModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Review & Send to HO</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 7: E-Detailing Interactive Viewer Modal -->
+  <div id="eDetailingModal" class="modal-backdrop">
+    <div class="modal-content" style="max-width:850px; background:#070f1e;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🖥️ E-Detailing Visual Aide Player (<span id="slideTimerText" style="color:var(--accent-teal);">Slide Time: 0s</span>)</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeEdetailingModal()">✕ Exit Player</button>
+      </div>
+
+      <div id="slideDisplayCard" style="background:#0d1b2a; border:1px solid var(--accent-teal); border-radius:var(--radius-lg); padding:40px; text-align:center; min-height:280px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+        <span class="tag-badge" id="slideHighlightTag" style="margin-bottom:12px; background:var(--accent-teal); color:#04101e;">P < 0.001 Significance</span>
+        <h2 id="slideTitle" style="font-size:1.6rem; color:#ffffff; margin-bottom:10px;">Cardia-90 Phase-III Clinical Trial Results</h2>
+        <p id="slideSubtitle" style="font-size:1.1rem; color:var(--text-muted);">38% Reduction in Major Adverse Cardiovascular Events (MACE)</p>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
+        <button class="btn btn-secondary" onclick="RepFlowApp.prevSlide()">◀️ Previous Slide</button>
+        <span id="slideIndexText" style="font-size:0.9rem; font-weight:700; color:var(--text-muted);">Slide 1 of 2</span>
+        <button class="btn btn-primary" onclick="RepFlowApp.nextSlide()">Next Slide ▶️</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 8: Inward Stock Modal -->
+  <div id="inwardStockModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🎒 Receive & Inward Stock into Sample Bag</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeInwardStockModal()">✕</button>
+      </div>
+      <form id="inwardStockForm" onsubmit="RepFlowApp.handleInwardStockSubmit(event)">
+        <div class="form-group">
+          <label>Product / Input Name</label>
+          <select id="inwardProductName" class="form-select" required>
+            <option value="Cardia-90 10mg Catch Covers">Cardia-90 10mg Catch Covers</option>
+            <option value="Glicla-M SR Starter Packs">Glicla-M SR Starter Packs</option>
+            <option value="NeuroFlow-SR Visual Aides">NeuroFlow-SR Visual Aides</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Item Type</label>
+            <select id="inwardItemType" class="form-select">
+              <option value="SAMPLE">Physician Sample Pack</option>
+              <option value="GIFT_INPUT">Brand Reminder / Gift</option>
+              <option value="BRAND_LIT">Brand Literature / Visual Aide</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Inward Quantity Received</label>
+            <input type="number" id="inwardQty" required min="1" placeholder="e.g. 25" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Batch Number</label>
+            <input type="text" id="inwardBatch" placeholder="e.g. B-2026-10" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Receipt Date</label>
+            <input type="date" id="inwardDate" required class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeInwardStockModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Inward Stock Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 9: Add Doctor Modal -->
+  <div id="addDoctorModal" class="modal-backdrop">
+    <div class="modal-content" style="max-width:650px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>👨‍⚕️ Register New Doctor Entry</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeAddDoctorModal()">✕</button>
+      </div>
+      <form id="addDoctorForm" onsubmit="RepFlowApp.handleAddDoctorSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Doctor Full Name</label>
+            <input type="text" id="newDocName" required placeholder="Dr. Ananya Roy" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Specialty</label>
+            <input type="text" id="newDocSpecialty" required placeholder="Cardiology" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="newDocCategory" class="form-select">
+              <option value="Superstar">Superstar</option>
+              <option value="A+">A+</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Area / Market Name</label>
+            <select id="newDocAreaName" class="form-select">
+              <option value="Saket">Saket</option>
+              <option value="Nehru Place">Nehru Place</option>
+              <option value="Green Park">Green Park</option>
+              <option value="AIIMS OPD">AIIMS OPD</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="text" id="newDocPhone" placeholder="+91 98100 11223" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="newDocEmail" placeholder="dr.ananya@cradle.com" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Hospital / Clinic Name & Full Address</label>
+          <input type="text" id="newDocAddress" required placeholder="Apollo Cradle, Pusph Vihar Saket, New Delhi" class="form-control">
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAddDoctorModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Doctor Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 10: Apply for Leave Modal -->
+  <div id="applyLeaveModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🌴 Apply for Leave</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeApplyLeaveModal()">✕</button>
+      </div>
+      <form id="applyLeaveForm" onsubmit="RepFlowApp.handleApplyLeaveSubmit(event)">
+        <div class="form-group">
+          <label>Leave Category</label>
+          <select id="leaveType" class="form-select">
+            <option value="CL">Casual Leave (CL)</option>
+            <option value="SL">Sick Leave (SL)</option>
+            <option value="EL">Earned Leave (EL)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" id="leaveStartDate" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="leaveEndDate" required class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Reason for Leave</label>
+          <textarea id="leaveReason" rows="3" required class="form-control" placeholder="Personal family event..."></textarea>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeApplyLeaveModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit Application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 11: Plan MTP Day Modal -->
+  <div id="planMtpModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🗓️ Plan Day Visit (<span id="modalMtpDate"></span>)</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closePlanMtpModal()">✕</button>
+      </div>
+      <form id="planMtpForm" onsubmit="RepFlowApp.handleSaveMtpDay(event)">
+        <input type="hidden" id="mtpModalDate">
+        <div class="form-group">
+          <label>Territory / Area Code</label>
+          <select id="mtpTerritory" class="form-select">
+            <option value="TR-DEL-S1 (Saket)">TR-DEL-S1 (Saket / Max Hospital)</option>
+            <option value="TR-DEL-S1 (Green Park)">TR-DEL-S1 (Green Park Market)</option>
+            <option value="TR-DEL-S1 (AIIMS)">TR-DEL-S1 (AIIMS OPD Block)</option>
+            <option value="TR-DEL-S2 (Hauz Khas)">TR-DEL-S2 (Hauz Khas)</option>
+            <option value="TR-DEL-S2 (Nehru Place)">TR-DEL-S2 (Nehru Place / Fortis)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Working Mode</label>
+            <select id="mtpWorkingType" class="form-select">
+              <option value="INDEPENDENT">Independent Working</option>
+              <option value="JOINT">Joint Working with AM / RM</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Objective for Day</label>
+          <input type="text" id="mtpObjective" placeholder="e.g. Launch Cardia-90 and Chemist POB Collection" class="form-control">
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closePlanMtpModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Day Plan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 12: Distribute Gift / Input Modal -->
+  <div id="distributeGiftModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🎁 Log Gift / Valuable Input Distribution</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeDistributeGiftModal()">✕</button>
+      </div>
+      <form id="distributeGiftForm" onsubmit="RepFlowApp.handleDistributeGiftSubmit(event)">
+        <div class="form-group">
+          <label>Select Doctor</label>
+          <select id="giftDoctorSelect" class="form-select" required></select>
+        </div>
+        <div class="form-group">
+          <label>Valuable Gift / Input Name</label>
+          <input type="text" id="giftNameInput" required placeholder="e.g. Cardiology Stethoscope / Textbook" class="form-control">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantity</label>
+            <input type="number" id="giftQtyInput" required min="1" value="1" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Estimated Value (₹)</label>
+            <input type="number" id="giftValueInput" required placeholder="e.g. 5000" class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeDistributeGiftModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Log Distribution</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 13: Add Academic RoI Proposal Modal -->
+  <div id="addRoiModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>🔬 Log Doctor Academic Activity Investment</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeAddRoiModal()">✕</button>
+      </div>
+      <form id="addRoiForm" onsubmit="RepFlowApp.handleAddRoiSubmit(event)">
+        <div class="form-group">
+          <label>Target Doctor</label>
+          <select id="roiDoctorSelect" class="form-select" required></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Activity Type</label>
+            <select id="roiActivityType" class="form-select">
+              <option value="CME Sponsorship">CME Sponsorship</option>
+              <option value="Clinical Research Grant">Clinical Research Grant</option>
+              <option value="Consultancy Fees">Consultancy Fees</option>
+              <option value="Medical Textbooks">Medical Textbooks</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Investment Amount (₹)</label>
+            <input type="number" id="roiAmount" required placeholder="e.g. 45000" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Expected Monthly Rx Increment (₹)</label>
+            <input type="number" id="roiExpectedRx" required placeholder="e.g. 120000" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Actual Monthly Rx Generated (₹)</label>
+            <input type="number" id="roiActualRx" required placeholder="e.g. 140000" class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAddRoiModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Investment Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 14: AM Field DCR Modal -->
+  <div id="amDcrModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>👔 Area Manager (AM) Field Daily Call Report</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeAmDcrModal()">✕</button>
+      </div>
+      <form id="amDcrForm" onsubmit="RepFlowApp.handleAmDcrSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>DCR Date</label>
+            <input type="date" id="amDate" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Working Mode</label>
+            <select id="amWorkingType" class="form-select" onchange="RepFlowApp.toggleAmJoint(this.value)">
+              <option value="INDEPENDENT">Independent (Visiting Key Doctors/KOLs Alone)</option>
+              <option value="JOINT">Joint Working (Supervising MR in Field)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="amJointMrGroup" style="display:none;">
+          <label>Supervised Medical Representative</label>
+          <select id="amJointMr" class="form-select">
+            <option value="5">Rahul Sharma (MR - Greater Kailash)</option>
+            <option value="6">Neha Verma (MR - Nehru Place)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Visited Key Doctor / KOL</label>
+          <select id="amDoctorSelect" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label>Field Observations & Coaching Feedback</label>
+          <textarea id="amObservations" rows="3" class="form-control" placeholder="Observed Rahul's detailing technique on Cardia-90..."></textarea>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAmDcrModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit AM DCR & Route to RM</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 15: RM Joint Field Call Modal -->
+  <div id="rmJointDcrModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>👔 Regional Manager (RM) Joint Field Call Log</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeRmJointDcrModal()">✕</button>
+      </div>
+      <form id="rmJointForm" onsubmit="RepFlowApp.handleRmJointSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Visit Date</label>
+            <input type="date" id="rmDate" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Accompanying Field Reps</label>
+            <select id="rmMrSelect" class="form-select">
+              <option value="5">Rahul Sharma (MR) & Vikram Singh (AM)</option>
+              <option value="6">Neha Verma (MR)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Visited Key Doctor / KOL</label>
+          <select id="rmDoctorSelect" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label>Coaching Feedback & Market Dynamics</label>
+          <textarea id="rmFeedback" rows="3" class="form-control" placeholder="Discussed Regional CME sponsorship with Dr. Rajesh Verma..."></textarea>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeRmJointDcrModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit RM DCR & Route to ZSM/HO</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 16: Upload / Entry Target & Sales Data Modal -->
+  <div id="uploadSalesDataModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3>📤 Upload / Update Product Target & Sales Data</h3>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="RepFlowApp.closeUploadSalesDataModal()">✕</button>
+      </div>
+      <form id="uploadSalesForm" onsubmit="RepFlowApp.handleUploadSalesSubmit(event)">
+        <div class="form-group">
+          <label>Product Name</label>
+          <select id="salesProductSelect" class="form-select">
+            <option value="Cardia-90 10mg Catch Covers">Cardia-90 10mg Catch Covers</option>
+            <option value="Glicla-M SR Starter Packs">Glicla-M SR Starter Packs</option>
+            <option value="NeuroFlow-SR Visual Aides">NeuroFlow-SR Visual Aides</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Monthly Target (₹)</label>
+            <input type="number" id="salesMonthlyTarget" required value="500000" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Secondary Sales Achieved (₹)</label>
+            <input type="number" id="salesSecondaryVal" required value="485000" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Primary Sales (₹)</label>
+            <input type="number" id="salesPrimaryVal" required value="460000" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Last Year Same Period Sales (₹)</label>
+            <input type="number" id="salesLyVal" required value="410000" class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeUploadSalesDataModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Sales Figures</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+</body>
+</html>
