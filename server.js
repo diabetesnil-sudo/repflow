@@ -1021,10 +1021,10 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`=======================================================`);
   console.log(` RepFlow Enterprise SaaS Server Online (Phase 8)`);
-  console.log(` Running on: http://localhost:${PORT}`);
+  console.log(` Running on port: ${PORT}`);
   console.log(` Tagline: The Offline-First Pharmaceutical Field Force OS`);
   console.log(`=======================================================`);
 });
