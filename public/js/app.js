@@ -145,6 +145,10 @@ const RepFlowApp = (() => {
     const orgLabel = document.getElementById('hierarchyOrgName');
     if (orgLabel) orgLabel.innerText = tenantName;
 
+    document.title = `${tenantName} - RepFlow PWA Field Force OS`;
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', activeTenantId === 1 ? '#070f1e' : '#0f2b48');
+
     showToast(`🏢 Switched active Pharma Tenant to: "${tenantName}"`, 'info');
     await loadInitialData();
     refreshActiveTabData();

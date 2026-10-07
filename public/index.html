@@ -6,6 +6,12 @@
   <title>RepFlow - The Offline-First Pharmaceutical Field Force Operating System</title>
   <meta name="description" content="The Offline-First Pharmaceutical Field Force Operating System for Medical Representatives and Pharma Management Hierarchy.">
   <meta name="theme-color" content="#070f1e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RepFlow PWA">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/css/styles.css">
   <script src="/js/sw-register.js" defer></script>
@@ -59,6 +65,9 @@
           <div id="statusDot" class="status-dot"></div>
           <span id="statusText" class="status-text">Online</span>
           <span id="syncBadge" class="sync-badge">0 Pending Syncs</span>
+          <button id="pwaInstallBtnHeader" class="btn btn-accent" style="padding:4px 10px; font-size:0.75rem; background:#00b4d8; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="promptPWAInstall()">
+            📲 Install PWA App
+          </button>
           <button id="pushNotifyBtn" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="RepFlowApp.requestNotificationPermission()">
             🔔 Push Alerts
           </button>
@@ -1595,6 +1604,38 @@
   </div>
 
   <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Floating PWA Install Banner -->
+  <div id="pwaInstallBanner" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); width:90%; max-width:480px; z-index:9999; background:linear-gradient(135deg, #070f1e, #0f2b48); border:1px solid #00f5d4; border-radius:16px; padding:14px 18px; box-shadow:0 12px 40px rgba(0,0,0,0.6); align-items:center; justify-content:space-between; gap:12px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <img src="/icons/icon.svg" style="width:42px; height:42px; border-radius:10px; border:1px solid rgba(0,245,212,0.3);" alt="RepFlow App Icon">
+      <div>
+        <div style="font-weight:700; color:#fff; font-size:0.9rem;">Install RepFlow PWA</div>
+        <div style="font-size:0.75rem; color:#94a3b8;">Offline Field Force OS for Medical Reps</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-primary" style="padding:6px 12px; font-size:0.8rem; background:#00b4d8; border:none; font-weight:700;" onclick="promptPWAInstall()">Install</button>
+      <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem; background:transparent; border:1px solid #475569; color:#94a3b8;" onclick="dismissPWABanner()">Later</button>
+    </div>
+  </div>
+
+  <!-- iOS Safari PWA Install Modal -->
+  <div id="iosPwaModal" class="modal-backdrop" style="display:none; align-items:center; justify-content:center;">
+    <div class="modal-card" style="max-width:400px; text-align:center; padding:24px;">
+      <img src="/icons/icon.svg" style="width:64px; height:64px; margin-bottom:12px;" alt="RepFlow PWA">
+      <h3 style="color:#00f5d4; margin-bottom:8px;">Install RepFlow on iOS</h3>
+      <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:16px;">
+        To install RepFlow PWA on your iPhone or iPad:
+      </p>
+      <ol style="text-align:left; font-size:0.85rem; color:#94a3b8; line-height:1.6; margin-bottom:20px; padding-left:20px;">
+        <li>Tap the <strong>Share button 📤</strong> at the bottom of Safari.</li>
+        <li>Scroll down and tap <strong>"Add to Home Screen" ➕</strong>.</li>
+        <li>Tap <strong>Add</strong> at top right to launch as a standalone app!</li>
+      </ol>
+      <button class="btn btn-primary" style="width:100%;" onclick="document.getElementById('iosPwaModal').style.display='none'">Got It!</button>
+    </div>
+  </div>
 
 </body>
 </html>

@@ -282,3 +282,25 @@ h1, h2, h3, h4, .brand-title { font-family: 'Outfit', sans-serif; }
 .toast-success { border-color: var(--accent-emerald); }
 .toast-warning { border-color: var(--accent-amber); }
 .toast-danger { border-color: var(--accent-rose); }
+
+/* PWA Standalone Mode & Safe Area Padding */
+@media all and (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app-header {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  }
+  .pwa-hide-standalone {
+    display: none !important;
+  }
+}
+
+.pwa-standalone-mode #pwaInstallBtnHeader,
+.pwa-standalone-mode #pwaInstallBanner {
+  display: none !important;
+}
+
