@@ -29,59 +29,96 @@
 </head>
 <body>
 
-  <!-- Top App Header -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand-wrapper">
-        <div class="brand-logo">RF</div>
-        <div class="brand-info">
-          <h1 id="brandTitle">RepFlow</h1>
-          <div class="brand-tagline">The Offline-First Pharmaceutical Field Force Operating System</div>
+  <!-- Enterprise App Shell with Corporate Vertical Sidebar -->
+  <div class="app-shell" id="appShell">
+    
+    <!-- Corporate Vertical Sidebar -->
+    <aside id="appSidebar" class="app-sidebar">
+      <!-- Sidebar Header & Brand -->
+      <div class="sidebar-header">
+        <div class="brand-wrapper">
+          <div class="brand-logo">RF</div>
+          <div class="brand-info">
+            <h1 id="brandTitle">RepFlow</h1>
+            <div class="brand-tagline">Pharma Field Force OS</div>
+          </div>
         </div>
+        <button class="sidebar-collapse-btn" onclick="RepFlowApp.toggleSidebarCollapse()" title="Toggle Sidebar">
+          <span>◀</span>
+        </button>
       </div>
 
-      <div class="header-controls">
-        <!-- Multi-Tenant SaaS Dynamic Organization Selector -->
-        <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:4px 8px; gap:6px;">
-          <span style="font-size:0.75rem; color:var(--text-muted);">🏢 Tenant:</span>
-          <select id="tenantSelect" style="background:transparent; border:none; color:var(--accent-teal); font-size:0.82rem; font-weight:700; outline:none; cursor:pointer;" onchange="RepFlowApp.switchTenant(this.value)">
-            <option value="1">Loading Tenants...</option>
-          </select>
-        </div>
+      <!-- Multi-Tenant SaaS Organization Selector -->
+      <div class="sidebar-tenant-card">
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; margin-bottom:4px;">🏢 Active Tenant:</div>
+        <select id="tenantSelect" class="sidebar-tenant-select" onchange="RepFlowApp.switchTenant(this.value)">
+          <option value="1">Loading Tenants...</option>
+        </select>
+      </div>
 
-        <!-- Persona Quick Switcher (6-Tier Hierarchy) -->
-        <div class="persona-switcher">
-          <span style="font-size:0.75rem; color:var(--text-muted); padding:0 6px;">Persona:</span>
-          <button class="persona-btn active" data-role="MR" onclick="RepFlowApp.switchPersona('MR')">Rahul (MR)</button>
-          <button class="persona-btn" data-role="AM" onclick="RepFlowApp.switchPersona('AM')">Vikram (AM)</button>
-          <button class="persona-btn" data-role="RM" onclick="RepFlowApp.switchPersona('RM')">Anita (RM)</button>
-          <button class="persona-btn" data-role="ZSM" onclick="RepFlowApp.switchPersona('ZSM')">Ramesh (ZSM)</button>
-          <button class="persona-btn" data-role="HO" onclick="RepFlowApp.switchPersona('HO')">Priya (HO)</button>
-          <button class="persona-btn" data-role="SUPERADMIN" onclick="RepFlowApp.switchPersona('SUPERADMIN')">SaaS Admin</button>
-        </div>
+      <!-- Persona User Badge -->
+      <div class="sidebar-user-badge">
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:700;">👤 User Persona:</div>
+        <div id="sidebarUserRoleName" style="font-size:0.85rem; font-weight:700; color:var(--accent-teal);">Rahul Sharma (MR)</div>
+      </div>
 
-        <!-- Network Mode Bar & Controls -->
-        <div class="network-bar">
-          <div id="statusDot" class="status-dot"></div>
-          <span id="statusText" class="status-text">Online</span>
-          <span id="syncBadge" class="sync-badge">0 Pending Syncs</span>
-          <button id="pwaInstallBtnHeader" class="btn btn-accent" style="padding:4px 10px; font-size:0.75rem; background:#00b4d8; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="promptPWAInstall()">
-            📲 Install PWA App
-          </button>
-          <button id="pushNotifyBtn" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="RepFlowApp.requestNotificationPermission()">
-            🔔 Push Alerts
-          </button>
-          <button id="offlineToggleBtn" class="toggle-offline-btn" onclick="RepFlowApp.toggleOfflineSim()">
-            ⚡ Simulate Offline
-          </button>
+      <!-- Vertical Feature Navigation Menu -->
+      <nav class="sidebar-nav" id="navTabs"></nav>
+      
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div style="font-size:0.7rem; color:var(--text-dim); text-align:center;">
+          RepFlow Corporate v8.0 PWA<br>Enterprise Operating System
         </div>
       </div>
-    </div>
-  </header>
+    </aside>
 
-  <!-- Main Container & Navigation Tabs -->
-  <main class="app-container">
-    <nav class="nav-tabs" id="navTabs"></nav>
+    <!-- Main Workspace Area -->
+    <div class="main-wrapper">
+      <!-- Top Workspace Bar -->
+      <header class="top-workspace-header">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="mobile-hamburger-btn" onclick="RepFlowApp.toggleMobileSidebar()">
+            ☰ Menu
+          </button>
+          <div class="workspace-title-badge" id="currentWorkspaceBadge">
+            💼 Field Operations Workspace
+          </div>
+        </div>
+
+        <!-- Header Right Controls -->
+        <div class="header-controls">
+          <!-- Persona Quick Switcher (6-Tier Hierarchy) -->
+          <div class="persona-switcher">
+            <span style="font-size:0.72rem; color:var(--text-muted); padding:0 4px;">Role:</span>
+            <button class="persona-btn active" data-role="MR" onclick="RepFlowApp.switchPersona('MR')">MR</button>
+            <button class="persona-btn" data-role="AM" onclick="RepFlowApp.switchPersona('AM')">AM</button>
+            <button class="persona-btn" data-role="RM" onclick="RepFlowApp.switchPersona('RM')">RM</button>
+            <button class="persona-btn" data-role="ZSM" onclick="RepFlowApp.switchPersona('ZSM')">ZSM</button>
+            <button class="persona-btn" data-role="HO" onclick="RepFlowApp.switchPersona('HO')">HO Admin</button>
+            <button class="persona-btn" data-role="SUPERADMIN" onclick="RepFlowApp.switchPersona('SUPERADMIN')">SaaS Admin</button>
+          </div>
+
+          <!-- Network & PWA Controls -->
+          <div class="network-bar">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText" class="status-text">Online</span>
+            <span id="syncBadge" class="sync-badge">0 Pending Syncs</span>
+            <button id="pwaInstallBtnHeader" class="btn btn-accent" style="padding:4px 10px; font-size:0.75rem; background:#00b4d8; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="promptPWAInstall()">
+              📲 Install PWA
+            </button>
+            <button id="pushNotifyBtn" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="RepFlowApp.requestNotificationPermission()">
+              🔔 Alerts
+            </button>
+            <button id="offlineToggleBtn" class="toggle-offline-btn" onclick="RepFlowApp.toggleOfflineSim()">
+              ⚡ Offline Sim
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Container -->
+      <main class="app-container">
 
     <!-- ====================================================================
          TAB: TEAM & HIERARCHY MANAGEMENT DESK (NEW)
@@ -1600,6 +1637,7 @@
           <button type="submit" class="btn btn-primary">Save Sales Figures</button>
         </div>
       </form>
+      </main>
     </div>
   </div>
 

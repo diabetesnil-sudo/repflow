@@ -49,25 +49,195 @@ body {
 
 h1, h2, h3, h4, .brand-title { font-family: 'Outfit', sans-serif; }
 
-/* App Header & Persona Controls */
-.app-header {
+/* App Shell & Corporate Vertical Sidebar Layout */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  background-color: var(--bg-dark);
+}
+
+.app-sidebar {
+  width: 270px;
+  min-width: 270px;
+  background: #091628;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 200;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-collapse-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.sidebar-collapse-btn:hover {
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
+}
+
+.sidebar-tenant-card, .sidebar-user-badge {
+  background: rgba(21, 34, 56, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.sidebar-tenant-select {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--accent-teal);
+  font-size: 0.85rem;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  flex: 1;
+}
+
+.sidebar-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: var(--transition-fast);
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-item.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(0, 180, 216, 0.25), rgba(59, 130, 246, 0.15));
+  border-color: var(--accent-teal);
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(0, 180, 216, 0.15);
+}
+
+.sidebar-footer {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.app-sidebar.collapsed {
+  width: 80px;
+  min-width: 80px;
+  padding: 16px 8px;
+}
+.app-sidebar.collapsed .brand-info,
+.app-sidebar.collapsed .brand-tagline,
+.app-sidebar.collapsed .sidebar-tenant-card,
+.app-sidebar.collapsed .sidebar-user-badge,
+.app-sidebar.collapsed .sidebar-footer,
+.app-sidebar.collapsed .sidebar-item-text {
+  display: none !important;
+}
+
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.top-workspace-header {
   background: rgba(13, 27, 42, 0.85);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-color);
+  padding: 12px 24px;
   position: sticky;
   top: 0;
   z-index: 100;
-  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.header-container {
-  max-width: 1350px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
+.workspace-title-badge {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+}
+
+.mobile-hamburger-btn {
+  display: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 1024px) {
+  .app-sidebar {
+    position: fixed;
+    left: -280px;
+    top: 0;
+    bottom: 0;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+  }
+  .app-sidebar.mobile-open {
+    left: 0;
+  }
+  .mobile-hamburger-btn {
+    display: inline-flex;
+  }
 }
 
 .brand-wrapper { display: flex; align-items: center; gap: 12px; }
@@ -81,12 +251,12 @@ h1, h2, h3, h4, .brand-title { font-family: 'Outfit', sans-serif; }
 }
 
 .brand-info h1 {
-  font-size: 1.4rem; font-weight: 700;
+  font-size: 1.3rem; font-weight: 700;
   background: linear-gradient(90deg, #ffffff, var(--accent-teal));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 
-.brand-tagline { font-size: 0.75rem; color: var(--text-muted); }
+.brand-tagline { font-size: 0.7rem; color: var(--text-muted); }
 .header-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
 .persona-switcher {
@@ -143,15 +313,7 @@ h1, h2, h3, h4, .brand-title { font-family: 'Outfit', sans-serif; }
 .sync-badge.has-pending { display: inline-block; animation: bounce 1s infinite; }
 
 /* Navigation & Container */
-.app-container { max-width: 1350px; width: 100%; margin: 0 auto; padding: 24px 16px; flex: 1; }
-.nav-tabs { display: flex; gap: 10px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; overflow-x: auto; }
-.nav-tab {
-  background: transparent; border: none; color: var(--text-muted); font-size: 0.9rem; font-weight: 600;
-  padding: 10px 16px; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center;
-  gap: 8px; transition: var(--transition-fast); white-space: nowrap;
-}
-.nav-tab:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.04); }
-.nav-tab.active { color: var(--accent-teal); background: rgba(0, 180, 216, 0.12); border: 1px solid rgba(0, 180, 216, 0.3); }
+.app-container { max-width: 1450px; width: 100%; margin: 0 auto; padding: 24px 20px; flex: 1; }
 
 .tab-content { display: none; }
 .tab-content.active { display: block; animation: fadeIn 0.3s ease; }

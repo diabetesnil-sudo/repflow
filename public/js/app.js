@@ -159,9 +159,8 @@ const RepFlowApp = (() => {
     const config = PERSONA_CONFIG[role];
     activeUser = { id: config.id, name: config.name, role: config.role, reportingManager: config.manager };
 
-    document.querySelectorAll('.persona-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.role === role);
-    });
+    const userBadge = document.getElementById('sidebarUserRoleName');
+    if (userBadge) userBadge.innerText = `${config.name} (${role})`;
 
     renderNavTabs(config.tabs);
     navigateToTab(config.tabs[0]);
@@ -174,10 +173,20 @@ const RepFlowApp = (() => {
     const container = document.getElementById('navTabs');
     if (!container) return;
     container.innerHTML = tabs.map(t => `
-      <button class="nav-tab ${t === tabs[0] ? 'active' : ''}" data-tab="${t}" onclick="RepFlowApp.navigateToTab('${t}')">
-        ${TAB_LABELS[t] || t}
+      <button class="sidebar-item nav-tab ${t === tabs[0] ? 'active' : ''}" data-tab="${t}" onclick="RepFlowApp.navigateToTab('${t}')">
+        <span class="sidebar-item-text">${TAB_LABELS[t] || t}</span>
       </button>
     `).join('');
+  }
+
+  function toggleSidebarCollapse() {
+    const sidebar = document.getElementById('appSidebar');
+    if (sidebar) sidebar.classList.toggle('collapsed');
+  }
+
+  function toggleMobileSidebar() {
+    const sidebar = document.getElementById('appSidebar');
+    if (sidebar) sidebar.classList.toggle('mobile-open');
   }
 
   function navigateToTab(tabId) {
@@ -1844,7 +1853,9 @@ const RepFlowApp = (() => {
     deleteTeamMember,
     impersonateUser,
     handleExcelFileSelect,
-    requestNotificationPermission
+    requestNotificationPermission,
+    toggleSidebarCollapse,
+    toggleMobileSidebar
   };
 
   return publicApi;

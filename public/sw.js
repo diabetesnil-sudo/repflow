@@ -1,6 +1,6 @@
-// RepFlow Multi-Tenant Enterprise PWA Service Worker (v7.0.0)
-const CACHE_NAME = 'repflow-pwa-v7.0.0';
-const DYNAMIC_CACHE = 'repflow-dynamic-v7.0.0';
+// RepFlow Multi-Tenant Enterprise PWA Service Worker (v8.0.0)
+const CACHE_NAME = 'repflow-pwa-v8.0.0';
+const DYNAMIC_CACHE = 'repflow-dynamic-v8.0.0';
 
 const STATIC_ASSETS = [
   '/',
