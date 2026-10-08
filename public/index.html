@@ -115,10 +115,499 @@
             </button>
           </div>
         </div>
-      </header>
+      <!-- Impersonation Active Alert Banner -->
+      <div id="impersonationBanner" style="display:none; background:linear-gradient(90deg, #7c3aed, #4f46e5); color:#ffffff; padding:10px 20px; align-items:center; justify-content:space-between; font-size:0.85rem; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:4px; font-size:0.75rem;">⚠️ IMPERSONATION MODE</span>
+          <span id="impersonationDetails">Viewing as Tenant Admin for Novis Pharma Ltd.</span>
+        </div>
+        <button class="btn btn-sm" style="background:#ffffff; color:#4f46e5; border:none; padding:4px 14px; font-size:0.78rem; font-weight:800; cursor:pointer; border-radius:6px;" onclick="RepFlowApp.exitImpersonation()">
+          Exit Impersonation Session 🚪
+        </button>
+      </div>
 
       <!-- Main Container -->
       <main class="app-container">
+
+    <!-- ====================================================================
+         SYSTEM ADMIN CONTROL PANEL (/system-admin)
+         ==================================================================== -->
+    
+    <!-- 1. System Admin: Tenant Management (/system-admin/tenants) -->
+    <section id="tab-system-admin-tenants" class="tab-content">
+      <div class="panel-card" style="background: linear-gradient(135deg, rgba(13, 27, 42, 0.95), rgba(124, 58, 237, 0.1));">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🛡️ System Admin: Cross-Tenant Governance & Provisioning</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Super Admin SaaS Platform Control Center | Onboard Client Enterprises & Manage Tenant Status
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary" style="background:linear-gradient(135deg, #7c3aed, #4f46e5);" onclick="RepFlowApp.openOnboardTenantModal()">
+              + Onboard New Pharma Enterprise
+            </button>
+          </div>
+        </div>
+
+        <div class="grid-cols-4" style="margin-bottom:20px;">
+          <div class="stat-card" style="border-left-color:#7c3aed;">
+            <div class="stat-icon" style="color:#7c3aed; background:rgba(124,58,237,0.15);">🏢</div>
+            <div class="stat-info">
+              <h4>Total Client Tenants</h4>
+              <div class="stat-value" id="sysAdminCountTenants">3 Active</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-icon">💼</div>
+            <div class="stat-info">
+              <h4>Total MR Seats Assigned</h4>
+              <div class="stat-value" id="sysAdminCountSeats">175 Seats</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-icon">💾</div>
+            <div class="stat-info">
+              <h4>CDN Storage Consumed</h4>
+              <div class="stat-value">412.8 GB</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-amber);">
+            <div class="stat-icon">💳</div>
+            <div class="stat-info">
+              <h4>Platform Monthly ARR</h4>
+              <div class="stat-value">₹1,49,998</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tenant ID</th>
+                <th>Pharma Company Name</th>
+                <th>Subdomain / Slug</th>
+                <th>Plan Tier</th>
+                <th>MR / AM Seat Quota</th>
+                <th>Billing Status</th>
+                <th>Actions & Impersonation</th>
+              </tr>
+            </thead>
+            <tbody id="sysAdminTenantsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. System Admin: Licensing & Feature Flags (/system-admin/licenses) -->
+    <section id="tab-system-admin-licenses" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🔑 Tenant Feature Flags & Module Licensing</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Configure Granular Module Entitlements & Resource Quotas Per Enterprise Client
+            </div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tenant Name</th>
+                <th>Plan Tier</th>
+                <th>CLM Detailing</th>
+                <th>Secondary Sales</th>
+                <th>Sample Tracking</th>
+                <th>Geo-Fencing</th>
+                <th>Tour Planning</th>
+                <th>Max MR / AM Seats</th>
+                <th>CDN Storage (GB)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sysAdminLicensesTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. System Admin: Global Master Templates (/system-admin/templates) -->
+    <section id="tab-system-admin-templates" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">📋 Global Taxonomy & Master Data Templates</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Pre-configured Taxonomies Cloned by New Pharma Enterprises on Signup
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openAddTemplateModal()">+ Add Taxonomy Template</button>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Category</th>
+                <th>Template Key</th>
+                <th>Taxonomy Name</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody id="sysAdminTemplatesTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. System Admin: PWA Infrastructure & Audit Logs (/system-admin/infrastructure) -->
+    <section id="tab-system-admin-infrastructure" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">⚡ PWA Telemetry, CDN & Immutable Audit Trail</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Service Worker Deployment Controls, Storage Monitors & Immutable Audit Logs
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="background:#f43f5e; color:#fff; border:none;" onclick="RepFlowApp.triggerGlobalCacheBust()">
+            💥 Trigger Global PWA Cache Bust
+          </button>
+        </div>
+
+        <div class="grid-cols-3" style="margin-bottom:24px;">
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-icon">📲</div>
+            <div class="stat-info">
+              <h4>PWA Service Worker Build</h4>
+              <div class="stat-value" id="pwaBuildVerDisplay">v8.0.0</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-icon">🌐</div>
+            <div class="stat-info">
+              <h4>Active SW Field Workers</h4>
+              <div class="stat-value">342 Devices</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-amber);">
+            <div class="stat-icon">🗄️</div>
+            <div class="stat-info">
+              <h4>CDN Storage Pool</h4>
+              <div class="stat-value">412.8 / 1500 GB</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);">📜 Platform Immutable Security Audit Logs</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Log ID</th>
+                <th>Actor Email</th>
+                <th>Action Event</th>
+                <th>Tenant ID</th>
+                <th>Event Details</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="sysAdminAuditLogsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ====================================================================
+         COMPANY ADMIN CONTROL PANEL (/tenant-admin)
+         ==================================================================== -->
+
+    <!-- 1. Company Admin: Hierarchy & Territory Management (/tenant-admin/territories) -->
+    <section id="tab-tenant-admin-territories" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🏢 Enterprise Hierarchy & Territory Command Center</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Manage Multi-Tier Field Force (NSM -> ZM -> RBM -> ABM -> MR) & Base Station Alignment
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.openCreateTeamMemberModal()">+ Add Staff Member</button>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Staff Name & Credentials</th>
+                <th>Role Tier</th>
+                <th>Therapeutic Division</th>
+                <th>Territory & Base Station</th>
+                <th>Reporting Manager</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminTerritoriesTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Company Admin: HCP Doctor & Chemist Master (/tenant-admin/hcp) -->
+    <section id="tab-tenant-admin-hcp" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">👨‍⚕️ HCP Doctor Master & Field Approval Queue</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Govern Doctor Classifications (Core A, B, C), Geo-Locations & Field Master Additions
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="RepFlowApp.exportTableToCSV('tenantAdminDoctorMasterTable', 'HCP_Doctor_Master.csv')">
+            📥 Export HCP Master to CSV
+          </button>
+        </div>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-amber);">⏳ Pending Field HCP Addition Requests (Master Queue)</h3>
+        <div class="table-responsive" style="margin-bottom:24px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Req ID</th>
+                <th>Requested By (MR)</th>
+                <th>Doctor Name</th>
+                <th>Specialty</th>
+                <th>Class</th>
+                <th>Clinic Address</th>
+                <th>Territory</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminHcpQueueTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);">🏥 Verified Doctor Master Directory</h3>
+        <div class="table-responsive">
+          <table class="data-table" id="tenantAdminDoctorMasterTable">
+            <thead>
+              <tr>
+                <th>Doc Code</th>
+                <th>Doctor Name</th>
+                <th>Specialty</th>
+                <th>Classification</th>
+                <th>Hospital / Clinic Address</th>
+                <th>Geo Coordinates</th>
+                <th>Target Call Freq</th>
+                <th>Territory</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminDoctorsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Company Admin: Product Catalog & CLM Library (/tenant-admin/products) -->
+    <section id="tab-tenant-admin-products" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">💊 Product SKU Catalog & e-Detailing CLM Library</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Manage Brand Pricing (PTS, PTR, MRP) & Interactive Field Detailing Slide Decks
+            </div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="RepFlowApp.openAddProductSkuModal()">+ Add Product SKU</button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.openUploadClmModal()">+ Upload CLM Deck</button>
+          </div>
+        </div>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);">📑 Interactive e-Detailing (CLM) Slide Decks</h3>
+        <div class="table-responsive" style="margin-bottom:24px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Deck ID</th>
+                <th>Presentation Title</th>
+                <th>Therapeutic Division</th>
+                <th>Format</th>
+                <th>Slides Count</th>
+                <th>Offline PWA Sync</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminClmTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-emerald);">💊 Master Product SKU Directory</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>SKU ID</th>
+                <th>Brand Name</th>
+                <th>Molecule Composition</th>
+                <th>Dosage Form</th>
+                <th>Pack Size</th>
+                <th>PTS (₹)</th>
+                <th>PTR (₹)</th>
+                <th>MRP (₹)</th>
+                <th>Division</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminProductsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Company Admin: Field Governance & Policy Rules (/tenant-admin/governance) -->
+    <section id="tab-tenant-admin-governance" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">⚖️ Field Compliance, Geofencing & DCR Policy Rules</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Configure Daily Visit Targets, Geofence Radius Tolerance & DCR Cutoff Rules
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="RepFlowApp.saveGovernancePolicyRules()">Save Policy Config</button>
+        </div>
+
+        <form id="governancePolicyForm" onsubmit="event.preventDefault(); RepFlowApp.saveGovernancePolicyRules();">
+          <div class="grid-cols-2" style="margin-bottom:20px;">
+            <div class="form-group">
+              <label>Minimum Required Doctor Calls Per Day</label>
+              <input type="number" id="govMinDocCalls" class="form-control" value="10" required>
+            </div>
+            <div class="form-group">
+              <label>Minimum Required Chemist Calls Per Day</label>
+              <input type="number" id="govMinChemCalls" class="form-control" value="4" required>
+            </div>
+            <div class="form-group">
+              <label>Geofence GPS Radius Tolerance (Meters)</label>
+              <input type="number" id="govGeofenceRadius" class="form-control" value="150" required>
+            </div>
+            <div class="form-group">
+              <label>Daily Call Report (DCR) Cutoff Time</label>
+              <input type="text" id="govDcrCutoff" class="form-control" value="23:59" required>
+            </div>
+          </div>
+        </form>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);">📦 Field Sample Inventory Dispatch Monitor</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Sample ID</th>
+                <th>MR Staff Name</th>
+                <th>Product Brand</th>
+                <th>Item Type</th>
+                <th>Batch Number</th>
+                <th>Allocated Qty</th>
+                <th>Current In-Hand Qty</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminSampleDispatchTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Company Admin: Field Analytics & Governance KPIs (/tenant-admin/reports) -->
+    <section id="tab-tenant-admin-reports" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">📊 Executive Field Force Analytics & Performance KPIs</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Real-time Field Coverage %, Joint Work Index & PWA Booked Secondary Orders
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="RepFlowApp.exportTableToCSV('tenantAdminPerformanceTable', 'Field_Force_Performance.csv')">
+            📥 Export Performance Report (CSV)
+          </button>
+        </div>
+
+        <div class="grid-cols-4" style="margin-bottom:24px;">
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-info">
+              <h4>Call Coverage %</h4>
+              <div class="stat-value" id="kpiCallCoverage">92.4%</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+              <h4>Joint Work Index</h4>
+              <div class="stat-value" id="kpiJointWork">8.6 Days</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-rose);">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-info">
+              <h4>Missed Doctor Visits</h4>
+              <div class="stat-value" id="kpiMissedVisits">14 Docs</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-amber);">
+            <div class="stat-icon">🛒</div>
+            <div class="stat-info">
+              <h4>PWA Chemist Orders (POB)</h4>
+              <div class="stat-value" id="kpiChemistPob">₹8.46 L</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);">🗺️ Territory Breakdown & Representative Yield</h3>
+        <div class="table-responsive">
+          <table class="data-table" id="tenantAdminPerformanceTable">
+            <thead>
+              <tr>
+                <th>Territory Code</th>
+                <th>Medical Representative</th>
+                <th>Doctors Mapped</th>
+                <th>Doctors Visited</th>
+                <th>Coverage %</th>
+                <th>Joint Calls</th>
+                <th>Chemist POB Value (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="tenantAdminReportsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
     <!-- ====================================================================
          TAB: TEAM & HIERARCHY MANAGEMENT DESK (NEW)
@@ -1638,6 +2127,146 @@
         </div>
       </form>
       </main>
+    </div>
+  <!-- Modal: Add Product SKU -->
+  <div id="addProductSkuModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="panel-header">
+        <h3 class="panel-title">💊 Add Product SKU to Master Catalog</h3>
+        <button class="btn btn-secondary" onclick="RepFlowApp.closeAddProductSkuModal()">✕</button>
+      </div>
+      <form id="addProductSkuForm" onsubmit="event.preventDefault(); RepFlowApp.handleAddProductSkuSubmit();">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Brand Name</label>
+            <input type="text" id="skuBrandName" placeholder="e.g. GlycoCard-M 500" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Molecule Composition</label>
+            <input type="text" id="skuMolecule" placeholder="e.g. Metformin 500mg + Glimepiride 2mg" required class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Dosage Form</label>
+            <select id="skuDosageForm" class="form-select">
+              <option value="Sustained Release Tablet">Sustained Release Tablet</option>
+              <option value="Film Coated Tablet">Film Coated Tablet</option>
+              <option value="Hard Gelatin Capsule">Hard Gelatin Capsule</option>
+              <option value="Softgel Capsule">Softgel Capsule</option>
+              <option value="Oral Syrup / Suspension">Oral Syrup / Suspension</option>
+              <option value="Injectable / IV Vial">Injectable / IV Vial</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Pack Size</label>
+            <input type="text" id="skuPackSize" placeholder="e.g. 10x15 Strips" required class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>PTS - Price To Stockist (₹)</label>
+            <input type="number" step="0.01" id="skuPts" placeholder="42.50" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>PTR - Price To Retailer (₹)</label>
+            <input type="number" step="0.01" id="skuPtr" placeholder="51.00" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label>MRP - Maximum Retail Price (₹)</label>
+            <input type="number" step="0.01" id="skuMrp" placeholder="68.00" required class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Therapeutic Division</label>
+          <select id="skuDivision" class="form-select">
+            <option value="Cardio-Diab">Cardio-Diab Division</option>
+            <option value="Neuro-Care">Neuro-Care Division</option>
+            <option value="Ortho-Care">Ortho-Care Division</option>
+            <option value="Gynae-Care">Gynae-Care Division</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAddProductSkuModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Product SKU</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Upload CLM Presentation -->
+  <div id="uploadClmModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="panel-header">
+        <h3 class="panel-title">📑 Upload CLM Digital Detailing Deck</h3>
+        <button class="btn btn-secondary" onclick="RepFlowApp.closeUploadClmModal()">✕</button>
+      </div>
+      <form id="uploadClmForm" onsubmit="event.preventDefault(); RepFlowApp.handleUploadClmSubmit();">
+        <div class="form-group">
+          <label>Presentation Title</label>
+          <input type="text" id="clmTitle" placeholder="e.g. GlycoCard 2026 Clinical Trial Detailing" required class="form-control">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Therapeutic Division</label>
+            <select id="clmDivision" class="form-select">
+              <option value="Cardio-Diab">Cardio-Diab Division</option>
+              <option value="Neuro-Care">Neuro-Care Division</option>
+              <option value="Ortho-Care">Ortho-Care Division</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>File Format</label>
+            <select id="clmFileType" class="form-select">
+              <option value="PDF">PDF Presentation</option>
+              <option value="ZIP">Interactive HTML5 ZIP Archive</option>
+              <option value="HTML5">HTML5 Interactive Bundle</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Total Slides Count</label>
+            <input type="number" id="clmSlidesCount" value="14" required class="form-control">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeUploadClmModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Publish CLM Deck for Field Sync</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Global Taxonomy Template -->
+  <div id="addTemplateModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="panel-header">
+        <h3 class="panel-title">📋 Add Global Master Taxonomy Template</h3>
+        <button class="btn btn-secondary" onclick="RepFlowApp.closeAddTemplateModal()">✕</button>
+      </div>
+      <form id="addTemplateForm" onsubmit="event.preventDefault(); RepFlowApp.handleAddTemplateSubmit();">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="templateCategory" class="form-select">
+              <option value="SPECIALTY">Doctor Specialty</option>
+              <option value="CHEMIST_CLASS">Chemist Classification</option>
+              <option value="VISIT_TYPE">Call Visit Type</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Taxonomy Name</label>
+            <input type="text" id="templateName" placeholder="e.g. Oncology & Hematology" required class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="templateDescription" placeholder="e.g. Cancer & blood disorder specialists" class="form-control">
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAddTemplateModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Master Template</button>
+        </div>
+      </form>
     </div>
   </div>
 

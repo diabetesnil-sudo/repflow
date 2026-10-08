@@ -22,16 +22,32 @@ const RepFlowApp = (() => {
   let slideTimerInterval = null;
   let slideSeconds = 0;
 
+  let activeImpersonation = null;
+
   const PERSONA_CONFIG = {
     MR: { id: 5, name: 'Rahul Sharma', role: 'MR', manager: 'Vikram Singh (AM)', tabs: ['mr-dashboard', 'dcr', 'edetailing', 'mtp', 'master', 'expenses', 'leaves', 'sample-bag', 'gifts', 'analytics'] },
     AM: { id: 4, name: 'Vikram Singh', role: 'AM', manager: 'Anita Sharma (RM)', tabs: ['am-dashboard', 'team-hierarchy', 'expenses', 'leaves', 'academic-roi', 'master'] },
     RM: { id: 3, name: 'Anita Sharma', role: 'RM', manager: 'Ramesh Gupta (ZSM)', tabs: ['rm-portal', 'team-hierarchy', 'academic-roi', 'expenses', 'leaves', 'master'] },
     ZSM: { id: 2, name: 'Ramesh Gupta', role: 'ZSM', manager: 'Priya Mehta (HO)', tabs: ['zsm-portal', 'team-hierarchy', 'ho-yield-analytics', 'academic-roi', 'master'] },
-    HO: { id: 1, name: 'Priya Mehta', role: 'HO', manager: 'Chief Executive Officer', tabs: ['team-hierarchy', 'ho-yield-analytics', 'academic-roi', 'ho-dashboard', 'master', 'expenses', 'leaves'] },
-    SUPERADMIN: { id: 99, name: 'SaaS Platform Admin', role: 'SUPERADMIN', manager: 'RepFlow Global Admin', tabs: ['superadmin', 'team-hierarchy', 'ho-yield-analytics', 'master', 'expenses'] }
+    HO: { id: 1, name: 'Priya Mehta', role: 'HO', manager: 'Chief Executive Officer', tabs: ['tenant-admin-territories', 'tenant-admin-hcp', 'tenant-admin-products', 'tenant-admin-governance', 'tenant-admin-reports', 'team-hierarchy', 'ho-yield-analytics', 'academic-roi'] },
+    SUPERADMIN: { id: 99, name: 'SaaS Platform Admin', role: 'SUPERADMIN', manager: 'RepFlow Global Admin', tabs: ['system-admin-tenants', 'system-admin-licenses', 'system-admin-templates', 'system-admin-infrastructure', 'tenant-admin-territories', 'tenant-admin-hcp', 'tenant-admin-products', 'tenant-admin-governance', 'tenant-admin-reports'] }
   };
 
   const TAB_LABELS = {
+    // System Admin Control Panel (/system-admin)
+    'system-admin-tenants': '🛡️ System Admin: Tenants',
+    'system-admin-licenses': '🔑 System Admin: Licensing & Flags',
+    'system-admin-templates': '📋 System Admin: Templates',
+    'system-admin-infrastructure': '⚡ System Admin: Infrastructure & Logs',
+
+    // Company Admin Control Panel (/tenant-admin)
+    'tenant-admin-territories': '🏢 Company Admin: Hierarchy & Territories',
+    'tenant-admin-hcp': '👨‍⚕️ Company Admin: HCP Doctor Master',
+    'tenant-admin-products': '💊 Company Admin: Product SKU & CLM',
+    'tenant-admin-governance': '⚖️ Company Admin: Field Governance',
+    'tenant-admin-reports': '📊 Company Admin: Analytics & Reports',
+
+    // Field Operations & Manager Desks
     'team-hierarchy': '👥 Team & Hierarchy',
     'mr-dashboard': '📊 MR Dashboard',
     'dcr': '📝 DCR Log',
@@ -49,7 +65,7 @@ const RepFlowApp = (() => {
     'zsm-portal': '🏆 ZSM Zonal Portal',
     'ho-yield-analytics': '📊 HO Yield Analytics',
     'ho-dashboard': '🏢 HO Master Admin',
-    'superadmin': '⚡ Super-Admin Portal'
+    'superadmin': '⚡ Legacy Super-Admin'
   };
 
   async function init() {
@@ -197,6 +213,19 @@ const RepFlowApp = (() => {
     document.querySelectorAll('.tab-content').forEach(c => {
       c.classList.toggle('active', c.id === `tab-${tabId}`);
     });
+
+    // System Admin Control Panel Tabs
+    if (tabId === 'system-admin-tenants') loadSystemAdminTenants();
+    if (tabId === 'system-admin-licenses') loadSystemAdminLicenses();
+    if (tabId === 'system-admin-templates') loadSystemAdminTemplates();
+    if (tabId === 'system-admin-infrastructure') loadSystemAdminInfrastructure();
+
+    // Company Admin Control Panel Tabs
+    if (tabId === 'tenant-admin-territories') loadTenantAdminTerritories();
+    if (tabId === 'tenant-admin-hcp') loadTenantAdminHcp();
+    if (tabId === 'tenant-admin-products') loadTenantAdminProducts();
+    if (tabId === 'tenant-admin-governance') loadTenantAdminGovernance();
+    if (tabId === 'tenant-admin-reports') loadTenantAdminReports();
 
     if (tabId === 'team-hierarchy') loadTeamHierarchyData();
     if (tabId === 'dcr') renderDcrForm();
@@ -1757,6 +1786,533 @@ const RepFlowApp = (() => {
     }
   }
 
+  // -------------------------------------------------------------
+  // System Admin Control Panel (/system-admin)
+  // -------------------------------------------------------------
+  async function loadSystemAdminTenants() {
+    try {
+      const res = await fetch('/api/system-admin/tenants');
+      if (res.ok) {
+        const tenants = await res.json();
+        const tbody = document.getElementById('sysAdminTenantsTableBody');
+        const countTenants = document.getElementById('sysAdminCountTenants');
+        const countSeats = document.getElementById('sysAdminCountSeats');
+
+        if (countTenants) countTenants.innerText = `${tenants.length} Active`;
+
+        let totalSeats = 0;
+        tenants.forEach(t => totalSeats += (t.mr_seat_count || 0));
+        if (countSeats) countSeats.innerText = `${totalSeats} Seats`;
+
+        if (tbody) {
+          tbody.innerHTML = tenants.map(t => {
+            const statusBadge = t.status === 'Active' 
+              ? '<span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981; border:1px solid #10b981;">Active</span>' 
+              : '<span class="tag-badge" style="background:rgba(244,63,94,0.2); color:#f43f5e; border:1px solid #f43f5e;">Suspended</span>';
+            
+            const isImpersonating = activeImpersonation && activeImpersonation.tenantId === t.id;
+
+            return `
+              <tr>
+                <td>#TEN-${t.id}</td>
+                <td><strong>${t.company_name}</strong><br><small style="color:var(--text-muted);">${t.therapeutic_focus || 'Cardio-Diab & General'}</small></td>
+                <td><code>${t.subdomain}.repflow.com</code></td>
+                <td><span class="tag-badge" style="background:rgba(124,58,237,0.2); color:#a78bfa;">${t.tier || 'Enterprise'}</span></td>
+                <td>${t.mr_seat_count || 50} Assigned / ${t.max_seats || 100} Quota</td>
+                <td>${statusBadge}</td>
+                <td>
+                  ${isImpersonating ? `
+                    <button class="btn btn-sm" style="background:#f43f5e; color:#fff;" onclick="RepFlowApp.exitImpersonation()">
+                      Exit Session 🚪
+                    </button>
+                  ` : `
+                    <button class="btn btn-sm" style="background:linear-gradient(135deg, #7c3aed, #4f46e5); color:#fff;" onclick="RepFlowApp.impersonateTenant(${t.id}, '${t.company_name}')">
+                      Login as Tenant Admin 🕵️
+                    </button>
+                  `}
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading system admin tenants', e);
+    }
+  }
+
+  async function loadSystemAdminLicenses() {
+    try {
+      const res = await fetch('/api/system-admin/licenses');
+      if (res.ok) {
+        const licenses = await res.json();
+        const tbody = document.getElementById('sysAdminLicensesTableBody');
+        if (tbody) {
+          tbody.innerHTML = licenses.map(l => `
+            <tr>
+              <td><strong>${l.company_name || 'Pharma Tenant #' + l.tenant_id}</strong></td>
+              <td><span class="tag-badge" style="background:rgba(124,58,237,0.2); color:#a78bfa;">${l.tier || 'Enterprise'}</span></td>
+              <td>${l.e_detailing_clm ? '✅ Enabled' : '❌ Disabled'}</td>
+              <td>${l.secondary_sales ? '✅ Enabled' : '❌ Disabled'}</td>
+              <td>${l.sample_tracking ? '✅ Enabled' : '❌ Disabled'}</td>
+              <td>${l.geo_fencing ? '✅ Enabled' : '❌ Disabled'}</td>
+              <td>${l.tour_planning ? '✅ Enabled' : '❌ Disabled'}</td>
+              <td>${l.max_mr_seats} Seats</td>
+              <td>${l.max_cdn_storage_gb} GB</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="RepFlowApp.showToast('Updated licensing flags for ${l.company_name}', 'success')">Configure</button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading system admin licenses', e);
+    }
+  }
+
+  async function loadSystemAdminTemplates() {
+    try {
+      const res = await fetch('/api/system-admin/templates');
+      if (res.ok) {
+        const templates = await res.json();
+        const tbody = document.getElementById('sysAdminTemplatesTableBody');
+        if (tbody) {
+          tbody.innerHTML = templates.map(t => `
+            <tr>
+              <td>#TMP-${t.id}</td>
+              <td><span class="tag-badge" style="background:rgba(0,180,216,0.2); color:#00b4d8;">${t.category}</span></td>
+              <td><code>${t.template_key}</code></td>
+              <td><strong>${t.name}</strong></td>
+              <td>${t.description || '-'}</td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading system admin templates', e);
+    }
+  }
+
+  async function loadSystemAdminInfrastructure() {
+    try {
+      const res = await fetch('/api/system-admin/audit-logs');
+      if (res.ok) {
+        const logs = await res.json();
+        const tbody = document.getElementById('sysAdminAuditLogsTableBody');
+        if (tbody) {
+          tbody.innerHTML = logs.map(l => `
+            <tr>
+              <td>#LOG-${l.id}</td>
+              <td>${l.actor_email}</td>
+              <td><span class="tag-badge" style="background:rgba(245,158,11,0.2); color:#f59e0b;">${l.action_event}</span></td>
+              <td>Tenant #${l.tenant_id || 'Global'}</td>
+              <td>${l.details || '-'}</td>
+              <td>${new Date(l.created_at).toLocaleString()}</td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading system admin audit logs', e);
+    }
+  }
+
+  function impersonateTenant(tenantId, tenantName) {
+    activeImpersonation = { tenantId, tenantName };
+    activeTenantId = tenantId;
+
+    const banner = document.getElementById('impersonationBanner');
+    const details = document.getElementById('impersonationDetails');
+    if (banner && details) {
+      details.innerText = `Viewing as Tenant Admin for "${tenantName}" (Tenant ID: #${tenantId})`;
+      banner.style.display = 'flex';
+    }
+
+    switchPersona('HO');
+    showToast(`🕵️ Impersonation Mode Active: Logged in as Company Admin for "${tenantName}"`, 'warning');
+  }
+
+  function exitImpersonation() {
+    if (!activeImpersonation) return;
+    const prevTenant = activeImpersonation.tenantName;
+    activeImpersonation = null;
+
+    const banner = document.getElementById('impersonationBanner');
+    if (banner) banner.style.display = 'none';
+
+    switchPersona('SUPERADMIN');
+    showToast(`🚪 Exited Impersonation Session for "${prevTenant}". Returned to System Admin Control Panel.`, 'info');
+  }
+
+  async function triggerGlobalCacheBust() {
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CACHE_BUST' });
+      }
+      showToast('💥 Global PWA Service Worker Cache Bust Triggered across active devices!', 'success');
+      loadSystemAdminInfrastructure();
+    } catch (e) {
+      showToast('Cache bust signal emitted.', 'info');
+    }
+  }
+
+  function openAddTemplateModal() {
+    openModal('addTemplateModal');
+  }
+
+  function closeAddTemplateModal() {
+    closeModal('addTemplateModal');
+  }
+
+  async function handleAddTemplateSubmit() {
+    const category = document.getElementById('templateCategory').value;
+    const name = document.getElementById('templateName').value;
+    const description = document.getElementById('templateDescription').value;
+    const template_key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+    try {
+      const res = await fetch('/api/system-admin/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, name, template_key, description })
+      });
+      if (res.ok) {
+        showToast(`📋 Master Taxonomy Template "${name}" created!`, 'success');
+        closeAddTemplateModal();
+        loadSystemAdminTemplates();
+      }
+    } catch (e) {
+      showToast('Failed creating template.', 'error');
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Company Admin Control Panel (/tenant-admin)
+  // -------------------------------------------------------------
+  async function loadTenantAdminTerritories() {
+    try {
+      const res = await fetch('/api/users', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (res.ok) {
+        const users = await res.json();
+        const tbody = document.getElementById('tenantAdminTerritoriesTableBody');
+        if (tbody) {
+          tbody.innerHTML = users.map(u => `
+            <tr>
+              <td>#USR-${u.id}</td>
+              <td><strong>${u.name}</strong><br><small style="color:var(--text-muted);">${u.email || u.username || 'staff@pharma.com'}</small></td>
+              <td><span class="tag-badge" style="background:rgba(0,245,212,0.15); color:#00f5d4;">${u.role}</span></td>
+              <td>${u.therapeutic_division || 'Cardio-Diab'}</td>
+              <td>${u.territory || u.headquarters || 'Delhi East HQ'}</td>
+              <td>${u.reporting_manager_name || 'N/A'}</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="RepFlowApp.impersonateUser(${u.id})">Edit Staff</button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading tenant admin territories', e);
+    }
+  }
+
+  async function loadTenantAdminHcp() {
+    try {
+      const queueRes = await fetch('/api/tenant-admin/hcp-approval-queue', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (queueRes.ok) {
+        const queue = await queueRes.json();
+        const tbodyQueue = document.getElementById('tenantAdminHcpQueueTableBody');
+        if (tbodyQueue) {
+          if (queue.length === 0) {
+            tbodyQueue.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No pending field doctor/chemist requests in queue.</td></tr>';
+          } else {
+            tbodyQueue.innerHTML = queue.map(q => `
+              <tr>
+                <td>#REQ-${q.id}</td>
+                <td><strong>${q.mr_name || 'Rahul Sharma (MR)'}</strong></td>
+                <td>${q.doc_name}</td>
+                <td>${q.specialty}</td>
+                <td><span class="tag-badge" style="background:rgba(245,158,11,0.2); color:#f59e0b;">${q.classification}</span></td>
+                <td>${q.clinic_address}</td>
+                <td>${q.territory}</td>
+                <td>
+                  <button class="btn btn-sm" style="background:var(--accent-emerald); color:#fff;" onclick="RepFlowApp.reviewHcpQueue(${q.id}, 'APPROVED')">Approve ✅</button>
+                  <button class="btn btn-sm" style="background:#f43f5e; color:#fff;" onclick="RepFlowApp.reviewHcpQueue(${q.id}, 'REJECTED')">Reject ❌</button>
+                </td>
+              </tr>
+            `).join('');
+          }
+        }
+      }
+
+      const docRes = await fetch(`/api/doctors?area_name=${activeAreaWorked}`, { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (docRes.ok) {
+        const docs = await docRes.json();
+        const tbodyDocs = document.getElementById('tenantAdminDoctorsTableBody');
+        if (tbodyDocs) {
+          tbodyDocs.innerHTML = docs.map(d => `
+            <tr>
+              <td>${d.code || 'DOC-' + d.id}</td>
+              <td><strong>${d.name}</strong></td>
+              <td>${d.specialty}</td>
+              <td><span class="tag-badge" style="background:rgba(0,180,216,0.2); color:#00b4d8;">${d.category || 'Core A'}</span></td>
+              <td>${d.hospital_clinic_name || d.clinic_address || 'Clinic HQ'}</td>
+              <td><code>${d.lat ? `${d.lat.toFixed(4)}, ${d.long.toFixed(4)}` : '28.5355, 77.2638'}</code></td>
+              <td>${d.target_visit_frequency || '2x / month'}</td>
+              <td>${d.territory_code || 'Delhi NCR'}</td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading tenant admin HCP master', e);
+    }
+  }
+
+  async function reviewHcpQueue(id, status) {
+    try {
+      const res = await fetch(`/api/tenant-admin/hcp-approval-queue/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': activeTenantId },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        showToast(`HCP Request #${id} updated to ${status}!`, 'success');
+        loadTenantAdminHcp();
+      }
+    } catch (e) {
+      showToast('Failed reviewing HCP request', 'error');
+    }
+  }
+
+  async function loadTenantAdminProducts() {
+    try {
+      const clmRes = await fetch('/api/tenant-admin/clm', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (clmRes.ok) {
+        const clm = await clmRes.json();
+        const tbodyClm = document.getElementById('tenantAdminClmTableBody');
+        if (tbodyClm) {
+          tbodyClm.innerHTML = clm.map(c => `
+            <tr>
+              <td>#CLM-${c.id}</td>
+              <td><strong>${c.title}</strong></td>
+              <td><span class="tag-badge" style="background:rgba(124,58,237,0.2); color:#a78bfa;">${c.therapeutic_division}</span></td>
+              <td><code>${c.file_type}</code></td>
+              <td>${c.slides_count} Slides</td>
+              <td>${c.offline_sync_enabled ? '✅ Offline Ready' : '⏳ Online Only'}</td>
+            </tr>
+          `).join('');
+        }
+      }
+
+      const prodRes = await fetch('/api/tenant-admin/products', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (prodRes.ok) {
+        const prods = await prodRes.json();
+        const tbodyProds = document.getElementById('tenantAdminProductsTableBody');
+        if (tbodyProds) {
+          tbodyProds.innerHTML = prods.map(p => `
+            <tr>
+              <td>#SKU-${p.id}</td>
+              <td><strong>${p.brand_name}</strong></td>
+              <td>${p.molecule}</td>
+              <td>${p.dosage_form}</td>
+              <td>${p.pack_size}</td>
+              <td>₹${p.pts}</td>
+              <td>₹${p.ptr}</td>
+              <td><strong>₹${p.mrp}</strong></td>
+              <td><span class="tag-badge" style="background:rgba(0,180,216,0.2); color:#00b4d8;">${p.division}</span></td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading tenant admin products', e);
+    }
+  }
+
+  function openAddProductSkuModal() {
+    openModal('addProductSkuModal');
+  }
+
+  function closeAddProductSkuModal() {
+    closeModal('addProductSkuModal');
+  }
+
+  async function handleAddProductSkuSubmit() {
+    const brand_name = document.getElementById('skuBrandName').value;
+    const molecule = document.getElementById('skuMolecule').value;
+    const dosage_form = document.getElementById('skuDosageForm').value;
+    const pack_size = document.getElementById('skuPackSize').value;
+    const pts = parseFloat(document.getElementById('skuPts').value);
+    const ptr = parseFloat(document.getElementById('skuPtr').value);
+    const mrp = parseFloat(document.getElementById('skuMrp').value);
+    const division = document.getElementById('skuDivision').value;
+
+    try {
+      const res = await fetch('/api/tenant-admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': activeTenantId },
+        body: JSON.stringify({ brand_name, molecule, dosage_form, pack_size, pts, ptr, mrp, division })
+      });
+      if (res.ok) {
+        showToast(`💊 Product SKU "${brand_name}" added to master catalog!`, 'success');
+        closeAddProductSkuModal();
+        loadTenantAdminProducts();
+      }
+    } catch (e) {
+      showToast('Failed adding product SKU.', 'error');
+    }
+  }
+
+  function openUploadClmModal() {
+    openModal('uploadClmModal');
+  }
+
+  function closeUploadClmModal() {
+    closeModal('uploadClmModal');
+  }
+
+  async function handleUploadClmSubmit() {
+    const title = document.getElementById('clmTitle').value;
+    const therapeutic_division = document.getElementById('clmDivision').value;
+    const file_type = document.getElementById('clmFileType').value;
+    const slides_count = parseInt(document.getElementById('clmSlidesCount').value);
+
+    try {
+      const res = await fetch('/api/tenant-admin/clm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': activeTenantId },
+        body: JSON.stringify({ title, therapeutic_division, file_type, slides_count, offline_sync_enabled: 1 })
+      });
+      if (res.ok) {
+        showToast(`📑 Published CLM Deck "${title}" for field sync!`, 'success');
+        closeUploadClmModal();
+        loadTenantAdminProducts();
+      }
+    } catch (e) {
+      showToast('Failed uploading CLM deck.', 'error');
+    }
+  }
+
+  async function loadTenantAdminGovernance() {
+    try {
+      const res = await fetch('/api/tenant-admin/governance', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (res.ok) {
+        const gov = await res.json();
+        if (gov) {
+          if (document.getElementById('govMinDocCalls')) document.getElementById('govMinDocCalls').value = gov.min_doc_calls_per_day || 10;
+          if (document.getElementById('govMinChemCalls')) document.getElementById('govMinChemCalls').value = gov.min_chem_calls_per_day || 4;
+          if (document.getElementById('govGeofenceRadius')) document.getElementById('govGeofenceRadius').value = gov.geofence_radius_meters || 150;
+          if (document.getElementById('govDcrCutoff')) document.getElementById('govDcrCutoff').value = gov.dcr_cutoff_time || '23:59';
+        }
+      }
+
+      const sampleRes = await fetch('/api/samples/bag', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (sampleRes.ok) {
+        const samples = await sampleRes.json();
+        const tbody = document.getElementById('tenantAdminSampleDispatchTableBody');
+        if (tbody) {
+          tbody.innerHTML = samples.map(s => `
+            <tr>
+              <td>#SMP-${s.id}</td>
+              <td><strong>Rahul Sharma (MR)</strong></td>
+              <td>${s.brand_name}</td>
+              <td>${s.item_type}</td>
+              <td><code>${s.batch_number}</code></td>
+              <td>50 Packs</td>
+              <td><strong>${s.qty_available} Packs</strong></td>
+              <td><span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981;">Active Stock</span></td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading tenant admin governance policy', e);
+    }
+  }
+
+  async function saveGovernancePolicyRules() {
+    const min_doc_calls_per_day = parseInt(document.getElementById('govMinDocCalls').value);
+    const min_chem_calls_per_day = parseInt(document.getElementById('govMinChemCalls').value);
+    const geofence_radius_meters = parseInt(document.getElementById('govGeofenceRadius').value);
+    const dcr_cutoff_time = document.getElementById('govDcrCutoff').value;
+
+    try {
+      const res = await fetch('/api/tenant-admin/governance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': activeTenantId },
+        body: JSON.stringify({ min_doc_calls_per_day, min_chem_calls_per_day, geofence_radius_meters, dcr_cutoff_time })
+      });
+      if (res.ok) {
+        showToast('⚖️ Field Governance Policies & DCR Rules Saved!', 'success');
+      }
+    } catch (e) {
+      showToast('Failed saving governance rules.', 'error');
+    }
+  }
+
+  async function loadTenantAdminReports() {
+    try {
+      const res = await fetch('/api/analytics/roi-hierarchical', { headers: { 'X-Tenant-ID': activeTenantId } });
+      if (res.ok) {
+        const data = await res.json();
+        const tbody = document.getElementById('tenantAdminPerformanceTableBody');
+        if (tbody && data.regional_compilation) {
+          tbody.innerHTML = data.regional_compilation.map(r => `
+            <tr>
+              <td><code>${r.territory || 'T-NCR-01'}</code></td>
+              <td><strong>${r.area_manager} (AM)</strong></td>
+              <td>28 Docs</td>
+              <td>26 Docs</td>
+              <td><span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981;">92.8%</span></td>
+              <td>${r.joint_calls || 8} Calls</td>
+              <td style="color:var(--accent-teal); font-weight:700;">₹${r.rx_yield.toLocaleString()}</td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading tenant admin reports', e);
+    }
+  }
+
+  function exportTableToCSV(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return showToast('Table not found for CSV export', 'warning');
+
+    let csv = [];
+    const rows = table.querySelectorAll('tr');
+
+    rows.forEach(row => {
+      let rowData = [];
+      const cols = row.querySelectorAll('th, td');
+      cols.forEach(col => {
+        let text = col.innerText.replace(/"/g, '""').replace(/\n/g, ' ');
+        rowData.push(`"${text}"`);
+      });
+      csv.push(rowData.join(','));
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + csv.join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast(`📥 Exported ${filename} successfully!`, 'success');
+  }
+
+  function refreshActiveTabData() {
+    const activeTabBtn = document.querySelector('.nav-tab.active');
+    if (activeTabBtn && activeTabBtn.dataset.tab) {
+      navigateToTab(activeTabBtn.dataset.tab);
+    }
+  }
+
   function showToast(msg, type = 'info') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
@@ -1855,7 +2411,34 @@ const RepFlowApp = (() => {
     handleExcelFileSelect,
     requestNotificationPermission,
     toggleSidebarCollapse,
-    toggleMobileSidebar
+    toggleMobileSidebar,
+    // Admin Panel Controllers
+    loadSystemAdminTenants,
+    loadSystemAdminLicenses,
+    loadSystemAdminTemplates,
+    loadSystemAdminInfrastructure,
+    impersonateTenant,
+    exitImpersonation,
+    triggerGlobalCacheBust,
+    openAddTemplateModal,
+    closeAddTemplateModal,
+    handleAddTemplateSubmit,
+    loadTenantAdminTerritories,
+    loadTenantAdminHcp,
+    reviewHcpQueue,
+    loadTenantAdminProducts,
+    openAddProductSkuModal,
+    closeAddProductSkuModal,
+    handleAddProductSkuSubmit,
+    openUploadClmModal,
+    closeUploadClmModal,
+    handleUploadClmSubmit,
+    loadTenantAdminGovernance,
+    saveGovernancePolicyRules,
+    loadTenantAdminReports,
+    exportTableToCSV,
+    showToast,
+    refreshActiveTabData
   };
 
   return publicApi;

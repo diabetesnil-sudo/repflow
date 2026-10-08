@@ -354,6 +354,91 @@ function initDatabaseSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // 19. System Admin: Tenant Licenses & Quotas Table
+    db.run(`CREATE TABLE IF NOT EXISTS tenant_licenses (
+      tenant_id INTEGER PRIMARY KEY,
+      e_detailing_clm INTEGER DEFAULT 1,
+      secondary_sales INTEGER DEFAULT 1,
+      sample_tracking INTEGER DEFAULT 1,
+      geo_fencing INTEGER DEFAULT 1,
+      tour_planning INTEGER DEFAULT 1,
+      max_mr_seats INTEGER DEFAULT 50,
+      max_am_seats INTEGER DEFAULT 10,
+      max_cdn_storage_gb INTEGER DEFAULT 100,
+      status TEXT DEFAULT 'ACTIVE',
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id)
+    )`);
+
+    // 20. System Admin: Global Master Templates Table
+    db.run(`CREATE TABLE IF NOT EXISTS global_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL,
+      item_key TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      description TEXT
+    )`);
+
+    // 21. System Admin: Immutable System Audit Logs Table
+    db.run(`CREATE TABLE IF NOT EXISTS system_audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor_email TEXT NOT NULL,
+      action TEXT NOT NULL,
+      tenant_id INTEGER,
+      details TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 22. Tenant Admin: Product SKU Master Table
+    db.run(`CREATE TABLE IF NOT EXISTS product_catalog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL DEFAULT 1,
+      brand_name TEXT NOT NULL,
+      molecule TEXT NOT NULL,
+      dosage_form TEXT NOT NULL,
+      pack_size TEXT NOT NULL,
+      pts REAL NOT NULL,
+      ptr REAL NOT NULL,
+      mrp REAL NOT NULL,
+      division TEXT DEFAULT 'Cardio-Diab'
+    )`);
+
+    // 23. Tenant Admin: CLM Digital Detailing Library Table
+    db.run(`CREATE TABLE IF NOT EXISTS clm_presentations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL DEFAULT 1,
+      title TEXT NOT NULL,
+      division TEXT DEFAULT 'Cardio-Diab',
+      file_type TEXT DEFAULT 'PDF',
+      slides_count INTEGER DEFAULT 12,
+      offline_sync INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 24. Tenant Admin: Field Governance Policy Rules Table
+    db.run(`CREATE TABLE IF NOT EXISTS field_governance (
+      tenant_id INTEGER PRIMARY KEY,
+      min_doctor_calls INTEGER DEFAULT 10,
+      min_chemist_calls INTEGER DEFAULT 4,
+      geofence_radius_meters INTEGER DEFAULT 150,
+      dcr_cutoff_time TEXT DEFAULT '23:59',
+      mtp_approval_required INTEGER DEFAULT 1,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id)
+    )`);
+
+    // 25. Tenant Admin: HCP Doctor/Chemist Master Approval Queue Table
+    db.run(`CREATE TABLE IF NOT EXISTS hcp_approval_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL DEFAULT 1,
+      mr_name TEXT NOT NULL,
+      doctor_name TEXT NOT NULL,
+      specialty TEXT NOT NULL,
+      category TEXT DEFAULT 'Core A',
+      clinic_address TEXT NOT NULL,
+      territory_code TEXT NOT NULL,
+      status TEXT DEFAULT 'PENDING',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
     seedInitialData();
   });
 }
@@ -363,14 +448,72 @@ function seedInitialData() {
     if (row && row.count === 0) {
       console.log('Seeding Multi-Tenant Pharma Organizations & SaaS Subscriptions...');
       db.run(`INSERT INTO tenants (id, company_name, slug, subscription_tier) VALUES 
-        (1, 'Astra Pharma Ltd.', 'astra-pharma', 'ENTERPRISE'),
-        (2, 'Sun Care Life Sciences', 'sun-care', 'ENTERPRISE'),
-        (3, 'Zydus Health Ltd.', 'zydus-health', 'PRO')`);
+        (1, 'Novis Pharma Ltd.', 'novis-pharma', 'ENTERPRISE'),
+        (2, 'Zeneca Lifesciences', 'zeneca-life', 'ENTERPRISE'),
+        (3, 'Apex Biotech Corp', 'apex-biotech', 'PRO')`);
 
       db.run(`INSERT INTO tenant_subscriptions (tenant_id, plan_tier, max_mr_seats, max_am_seats, monthly_price, billing_status, next_billing_date) VALUES 
-        (1, 'ENTERPRISE', 100, 20, 75000, 'ACTIVE', '2026-08-31'),
-        (2, 'ENTERPRISE', 50, 10, 49999, 'ACTIVE', '2026-08-31'),
-        (3, 'PRO', 25, 5, 25000, 'ACTIVE', '2026-08-31')`);
+        (1, 'ENTERPRISE', 100, 20, 75000, 'ACTIVE', '2026-12-31'),
+        (2, 'ENTERPRISE', 50, 10, 49999, 'ACTIVE', '2026-12-31'),
+        (3, 'PRO', 25, 5, 25000, 'ACTIVE', '2026-12-31')`);
+
+      db.run(`INSERT INTO tenant_licenses (tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status) VALUES 
+        (1, 1, 1, 1, 1, 1, 100, 20, 250, 'ACTIVE'),
+        (2, 1, 1, 1, 1, 0, 50, 10, 100, 'ACTIVE'),
+        (3, 1, 0, 1, 0, 1, 25, 5, 50, 'TRIAL')`);
+    }
+  });
+
+  db.get("SELECT COUNT(*) as count FROM global_templates", (err, row) => {
+    if (row && row.count === 0) {
+      db.run(`INSERT INTO global_templates (category, item_key, item_name, description) VALUES 
+        ('SPECIALTY', 'CARDIO', 'Cardiology', 'Heart & Cardiovascular Specialists'),
+        ('SPECIALTY', 'DIABETES', 'Diabetology & Endocrinology', 'Metabolic & Diabetes Care'),
+        ('SPECIALTY', 'NEURO', 'Neurology', 'Central Nervous System'),
+        ('SPECIALTY', 'ORTHO', 'Orthopedics', 'Bone & Joint Specialists'),
+        ('SPECIALTY', 'GYNAE', 'Gynaecology & Obstetrics', 'Women Health & Fertility'),
+        ('CHEMIST_CLASS', 'CLASS_A', 'Tier-A Retail Chemist', 'High volume prescription chemist'),
+        ('CHEMIST_CLASS', 'WHOLESALE', 'Stockist / Wholesaler', 'Primary & secondary distribution partner'),
+        ('VISIT_TYPE', 'PLANNED', 'Planned Call', 'Mapped via Monthly Tour Plan (MTP)'),
+        ('VISIT_TYPE', 'UNPLANNED', 'Unplanned Doctor Call', 'Emergency / Ad-hoc field call'),
+        ('VISIT_TYPE', 'JOINT', 'Joint Call', 'ABM / RBM accompaniment call')`);
+    }
+  });
+
+  db.get("SELECT COUNT(*) as count FROM product_catalog", (err, row) => {
+    if (row && row.count === 0) {
+      db.run(`INSERT INTO product_catalog (tenant_id, brand_name, molecule, dosage_form, pack_size, pts, ptr, mrp, division) VALUES 
+        (1, 'GlycoCard-M 500', 'Metformin HCl 500mg + Glimepiride 2mg', 'Sustained Release Tablet', '10x15 Strips', 42.50, 51.00, 68.00, 'Cardio-Diab'),
+        (1, 'CardioVasc 10', 'Amlodipine 10mg + Telmisartan 40mg', 'Film Coated Tablet', '10x10 Strips', 55.00, 66.00, 88.00, 'Cardio-Diab'),
+        (1, 'NeuroCalm Forte', 'Pregabalin 75mg + Methylcobalamin 1500mcg', 'Hard Gelatin Capsule', '10x10 Capsules', 85.00, 102.00, 136.00, 'Neuro-Care'),
+        (1, 'OsteoFlex-D3', 'Calcium Carbonate 1250mg + Vit D3 2000IU', 'Chewable Tablet', '10x15 Tablets', 38.00, 45.60, 60.80, 'Ortho-Care'),
+        (1, 'GynaeFolic 5', 'L-Methylfolate 1mg + Pyridoxal-5-Phosphate', 'Tablet', '10x10 Strips', 48.00, 57.60, 76.80, 'Gynae-Care')`);
+    }
+  });
+
+  db.get("SELECT COUNT(*) as count FROM clm_presentations", (err, row) => {
+    if (row && row.count === 0) {
+      db.run(`INSERT INTO clm_presentations (tenant_id, title, division, file_type, slides_count, offline_sync) VALUES 
+        (1, 'GlycoCard-M 2026 Clinical Evidence & Detailing Deck', 'Cardio-Diab', 'PDF', 14, 1),
+        (1, 'CardioVasc Multi-Center Hypertension Study', 'Cardio-Diab', 'ZIP', 22, 1),
+        (1, 'NeuroCalm Diabetic Neuropathy Detailing Deck', 'Neuro-Care', 'HTML5', 18, 1)`);
+    }
+  });
+
+  db.get("SELECT COUNT(*) as count FROM field_governance", (err, row) => {
+    if (row && row.count === 0) {
+      db.run(`INSERT INTO field_governance (tenant_id, min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required) VALUES 
+        (1, 10, 4, 150, '23:59', 1),
+        (2, 12, 5, 200, '22:00', 1),
+        (3, 8, 3, 300, '23:59', 0)`);
+    }
+  });
+
+  db.get("SELECT COUNT(*) as count FROM hcp_approval_queue", (err, row) => {
+    if (row && row.count === 0) {
+      db.run(`INSERT INTO hcp_approval_queue (tenant_id, mr_name, doctor_name, specialty, category, clinic_address, territory_code, status) VALUES 
+        (1, 'Rahul Sharma (MR)', 'Dr. Vikramaditya Sen', 'Cardiology', 'Core A', 'Suite 402, Max Super Specialty Hospital, Saket', 'T-GREATER-KAILASH', 'PENDING'),
+        (1, 'Neha Verma (MR)', 'Dr. Meenakshi Sundaram', 'Endocrinology', 'Semi-Core B', 'Clinic 12, Apollo Health Center, Nehru Place', 'T-NEHRU-PLACE', 'PENDING')`);
     }
   });
 
@@ -1015,6 +1158,257 @@ app.delete('/api/users/:id', (req, res) => {
 
 app.post('/api/notifications/trigger', (req, res) => {
   res.json({ message: 'Web Push Notification alert sent.' });
+});
+
+// -------------------------------------------------------------
+// System Admin Control Panel APIs (/system-admin)
+// -------------------------------------------------------------
+
+// System Admin: Licensing & Feature Flags
+app.get('/api/system-admin/licenses', (req, res) => {
+  db.all(`SELECT l.*, t.company_name, t.slug, t.subscription_tier 
+          FROM tenant_licenses l 
+          JOIN tenants t ON l.tenant_id = t.id 
+          ORDER BY l.tenant_id ASC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/system-admin/licenses', (req, res) => {
+  const { tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status } = req.body;
+  if (!tenant_id) return res.status(400).json({ error: 'Tenant ID required' });
+
+  db.run(`INSERT INTO tenant_licenses (tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(tenant_id) DO UPDATE SET
+            e_detailing_clm = excluded.e_detailing_clm,
+            secondary_sales = excluded.secondary_sales,
+            sample_tracking = excluded.sample_tracking,
+            geo_fencing = excluded.geo_fencing,
+            tour_planning = excluded.tour_planning,
+            max_mr_seats = excluded.max_mr_seats,
+            max_am_seats = excluded.max_am_seats,
+            max_cdn_storage_gb = excluded.max_cdn_storage_gb,
+            status = excluded.status`,
+    [tenant_id, e_detailing_clm ? 1 : 0, secondary_sales ? 1 : 0, sample_tracking ? 1 : 0, geo_fencing ? 1 : 0, tour_planning ? 1 : 0, max_mr_seats || 50, max_am_seats || 10, max_cdn_storage_gb || 100, status || 'ACTIVE'],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+
+      db.run(`INSERT INTO system_audit_logs (actor_email, action, tenant_id, details) VALUES ('superadmin@repflow.io', 'LICENSE_UPDATE', ?, ?)`,
+        [tenant_id, `Updated feature flags & quotas for Tenant #${tenant_id}`]);
+
+      res.json({ message: `Successfully updated feature flags and licensing for Tenant #${tenant_id}` });
+    }
+  );
+});
+
+// System Admin: Global Master Templates
+app.get('/api/system-admin/templates', (req, res) => {
+  db.all(`SELECT * FROM global_templates ORDER BY category ASC, id ASC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/system-admin/templates', (req, res) => {
+  const { category, item_key, item_name, description } = req.body;
+  if (!category || !item_name) return res.status(400).json({ error: 'Category and Item Name required' });
+
+  const key = item_key || item_name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  db.run(`INSERT INTO global_templates (category, item_key, item_name, description) VALUES (?, ?, ?, ?)`,
+    [category, key, item_name, description || ''],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, message: `Added template "${item_name}" to ${category}` });
+    }
+  );
+});
+
+// System Admin: Infrastructure & Audit Logs
+app.get('/api/system-admin/infrastructure', (req, res) => {
+  db.all(`SELECT * FROM system_audit_logs ORDER BY id DESC LIMIT 50`, [], (err, logs) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({
+      pwa_version: 'v8.0.0',
+      active_service_workers: 342,
+      cdn_storage_total_gb: 1500,
+      cdn_storage_used_gb: 412.8,
+      audit_logs: logs || []
+    });
+  });
+});
+
+app.post('/api/system-admin/infrastructure/cache-bust', (req, res) => {
+  const { target_tenant_id } = req.body;
+  db.run(`INSERT INTO system_audit_logs (actor_email, action, tenant_id, details) VALUES ('superadmin@repflow.io', 'CACHE_BUST_TRIGGERED', ?, ?)`,
+    [target_tenant_id || 0, `Triggered PWA Cache Bust for ${target_tenant_id ? 'Tenant #' + target_tenant_id : 'GLOBAL PLATFORM'}`]);
+  res.json({ message: `PWA Service Worker cache bust signal dispatched for ${target_tenant_id ? 'Tenant #' + target_tenant_id : 'All Platform Tenants'}` });
+});
+
+app.post('/api/system-admin/impersonate', (req, res) => {
+  const { tenant_id, actor_email } = req.body;
+  if (!tenant_id) return res.status(400).json({ error: 'Tenant ID required for impersonation' });
+
+  db.get(`SELECT t.id, t.company_name, u.email as admin_email, u.name as admin_name 
+          FROM tenants t 
+          LEFT JOIN users u ON t.id = u.tenant_id AND u.role = 'HO' 
+          WHERE t.id = ? LIMIT 1`, [tenant_id], (err, tenant) => {
+    if (err || !tenant) return res.status(404).json({ error: 'Tenant Admin not found for impersonation' });
+
+    db.run(`INSERT INTO system_audit_logs (actor_email, action, tenant_id, details) VALUES (?, 'START_IMPERSONATION', ?, ?)`,
+      [actor_email || 'superadmin@repflow.io', tenant_id, `Impersonated Tenant Admin: ${tenant.company_name}`]);
+
+    res.json({
+      impersonation_active: true,
+      tenant_id: tenant.id,
+      company_name: tenant.company_name,
+      admin_email: tenant.admin_email || `admin@tenant${tenant.id}.com`,
+      admin_name: tenant.admin_name || `${tenant.company_name} Admin`,
+      message: `Impersonation session initiated for ${tenant.company_name}`
+    });
+  });
+});
+
+// -------------------------------------------------------------
+// Company Admin Control Panel APIs (/tenant-admin)
+// -------------------------------------------------------------
+
+// Company Admin: HCP Doctor/Chemist Approval Queue
+app.get('/api/tenant-admin/hcp', (req, res) => {
+  db.all(`SELECT * FROM hcp_approval_queue WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (err, pendingQueue) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.all(`SELECT * FROM doctors WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (derr, doctors) => {
+      if (derr) return res.status(500).json({ error: derr.message });
+      db.all(`SELECT * FROM chemists WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (cerr, chemists) => {
+        if (cerr) return res.status(500).json({ error: cerr.message });
+        res.json({
+          doctors: doctors || [],
+          chemists: chemists || [],
+          approval_queue: pendingQueue || []
+        });
+      });
+    });
+  });
+});
+
+app.post('/api/tenant-admin/hcp/approval-queue/:id/review', (req, res) => {
+  const queueId = parseInt(req.params.id);
+  const { action } = req.body;
+
+  db.get(`SELECT * FROM hcp_approval_queue WHERE id = ? AND tenant_id = ?`, [queueId, req.tenant_id], (err, item) => {
+    if (err || !item) return res.status(404).json({ error: 'Request item not found' });
+
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    db.run(`UPDATE hcp_approval_queue SET status = ? WHERE id = ?`, [newStatus, queueId], function(uerr) {
+      if (uerr) return res.status(500).json({ error: uerr.message });
+
+      if (action === 'APPROVE') {
+        const code = `DOC-${Date.now().toString().slice(-4)}`;
+        db.run(`INSERT INTO doctors (tenant_id, code, name, specialty, category, clinic_address, territory_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [req.tenant_id, code, item.doctor_name, item.specialty, item.category || 'Core A', item.clinic_address, item.territory_code]);
+      }
+
+      res.json({ message: `HCP Addition Request ${newStatus} for ${item.doctor_name}` });
+    });
+  });
+});
+
+// Company Admin: Products & CLM Presentations
+app.get('/api/tenant-admin/products', (req, res) => {
+  db.all(`SELECT * FROM product_catalog WHERE tenant_id = ? ORDER BY id ASC`, [req.tenant_id], (err, skus) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.all(`SELECT * FROM clm_presentations WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (cerr, clmDecks) => {
+      if (cerr) return res.status(500).json({ error: cerr.message });
+      res.json({
+        products: skus || [],
+        clm_presentations: clmDecks || []
+      });
+    });
+  });
+});
+
+app.post('/api/tenant-admin/products', (req, res) => {
+  const { brand_name, molecule, dosage_form, pack_size, pts, ptr, mrp, division } = req.body;
+  if (!brand_name || !molecule) return res.status(400).json({ error: 'Brand Name and Molecule required' });
+
+  db.run(`INSERT INTO product_catalog (tenant_id, brand_name, molecule, dosage_form, pack_size, pts, ptr, mrp, division) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.tenant_id, brand_name, molecule, dosage_form || 'Tablet', pack_size || '10x10 Strips', parseFloat(pts) || 50, parseFloat(ptr) || 60, parseFloat(mrp) || 80, division || 'Cardio-Diab'],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, message: `Added product SKU "${brand_name}" to Catalog` });
+    }
+  );
+});
+
+app.post('/api/tenant-admin/clm/upload', (req, res) => {
+  const { title, division, file_type, slides_count, offline_sync } = req.body;
+  if (!title) return res.status(400).json({ error: 'Presentation Title required' });
+
+  db.run(`INSERT INTO clm_presentations (tenant_id, title, division, file_type, slides_count, offline_sync) VALUES (?, ?, ?, ?, ?, ?)`,
+    [req.tenant_id, title, division || 'Cardio-Diab', file_type || 'PDF', parseInt(slides_count) || 12, offline_sync ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, message: `Uploaded CLM Deck "${title}" for field detailing` });
+    }
+  );
+});
+
+// Company Admin: Field Governance Policy Rules
+app.get('/api/tenant-admin/governance', (req, res) => {
+  db.get(`SELECT * FROM field_governance WHERE tenant_id = ?`, [req.tenant_id], (err, policy) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const defaultPolicy = policy || {
+      tenant_id: req.tenant_id,
+      min_doctor_calls: 10,
+      min_chemist_calls: 4,
+      geofence_radius_meters: 150,
+      dcr_cutoff_time: '23:59',
+      mtp_approval_required: 1
+    };
+
+    db.all(`SELECT v.*, u.name as mr_name FROM virtual_sample_bags v JOIN users u ON v.mr_id = u.id WHERE v.tenant_id = ?`, [req.tenant_id], (serr, samples) => {
+      res.json({
+        policy: defaultPolicy,
+        sample_dispatches: samples || []
+      });
+    });
+  });
+});
+
+app.post('/api/tenant-admin/governance', (req, res) => {
+  const { min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required } = req.body;
+  db.run(`INSERT INTO field_governance (tenant_id, min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(tenant_id) DO UPDATE SET
+            min_doctor_calls = excluded.min_doctor_calls,
+            min_chemist_calls = excluded.min_chemist_calls,
+            geofence_radius_meters = excluded.geofence_radius_meters,
+            dcr_cutoff_time = excluded.dcr_cutoff_time,
+            mtp_approval_required = excluded.mtp_approval_required`,
+    [req.tenant_id, parseInt(min_doctor_calls) || 10, parseInt(min_chemist_calls) || 4, parseInt(geofence_radius_meters) || 150, dcr_cutoff_time || '23:59', mtp_approval_required ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Field Governance Policy Rules updated successfully' });
+    }
+  );
+});
+
+// Company Admin: Field Analytics & Governance KPIs
+app.get('/api/tenant-admin/reports', (req, res) => {
+  res.json({
+    kpis: {
+      call_coverage_pct: 92.4,
+      joint_work_index: 8.6,
+      missed_visits_count: 14,
+      chemist_order_value_pwa: 846500
+    },
+    territory_performance: [
+      { territory: 'T-GREATER-KAILASH', mr_name: 'Rahul Sharma', doctors_targeted: 35, doctors_visited: 33, coverage_pct: 94.2, joint_calls: 6, pob_booked: 245000 },
+      { territory: 'T-NEHRU-PLACE', mr_name: 'Neha Verma', doctors_targeted: 30, doctors_visited: 27, coverage_pct: 90.0, joint_calls: 4, pob_booked: 185000 },
+      { territory: 'T-SAKET-CENTRAL', mr_name: 'Amit Patel', doctors_targeted: 40, doctors_visited: 37, coverage_pct: 92.5, joint_calls: 7, pob_booked: 416500 }
+    ]
+  });
 });
 
 app.use((req, res) => {
