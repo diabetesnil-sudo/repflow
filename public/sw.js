@@ -1,6 +1,6 @@
-// RepFlow Multi-Tenant Enterprise PWA Service Worker (v8.0.0)
-const CACHE_NAME = 'repflow-pwa-v8.0.0';
-const DYNAMIC_CACHE = 'repflow-dynamic-v8.0.0';
+// RepFlow Multi-Tenant Enterprise PWA Service Worker (v9.5.0 Admin Control Panel Release)
+const CACHE_NAME = 'repflow-pwa-v9.5.0-admin-ui';
+const DYNAMIC_CACHE = 'repflow-dynamic-v9.5.0-admin-ui';
 
 const STATIC_ASSETS = [
   '/',
@@ -15,7 +15,7 @@ const STATIC_ASSETS = [
 
 // 1. Install Event: Cache App Shell & Immediately Skip Waiting
 self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] Installing RepFlow PWA Shell...');
+  console.log('[ServiceWorker] Installing RepFlow PWA Shell (v9.5.0 Admin Release)...');
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -27,15 +27,15 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Activate Event: Wipe old caches and claim clients immediately
+// 2. Activate Event: Wipe ALL legacy caches immediately and claim clients
 self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] Activating RepFlow PWA Service Worker...');
+  console.log('[ServiceWorker] Activating RepFlow PWA Service Worker v9.5.0...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME && cache !== DYNAMIC_CACHE) {
-            console.log('[ServiceWorker] Clearing legacy cache:', cache);
+            console.log('[ServiceWorker] Purging legacy PWA cache store:', cache);
             return caches.delete(cache);
           }
         })
@@ -44,7 +44,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event Strategy: Network-First for API, Cache-First / Stale-While-Revalidate for UI
+// 3. Fetch Event Strategy: Network-First for API & HTML/JS (Live Updates), Cache-Fallback for Offline
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
@@ -70,11 +70,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // B. Static UI Assets & Detailing Aids: Cache-First / Stale-While-Revalidate
+  // B. HTML / JS / CSS Assets: Network-First to ensure instant deployment updates
+  if (req.headers.get('accept')?.includes('text/html') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname === '/') {
+    event.respondWith(
+      fetch(req).then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, responseToCache));
+        }
+        return networkResponse;
+      }).catch(async () => {
+        const cachedResponse = await caches.match(req);
+        if (cachedResponse) return cachedResponse;
+        if (req.headers.get('accept')?.includes('text/html')) {
+          return caches.match('/index.html');
+        }
+      })
+    );
+    return;
+  }
+
+  // C. Static Media / Icons: Stale-While-Revalidate
   event.respondWith(
     caches.match(req).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch background update for cache freshness
         fetch(req).then(networkResponse => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(DYNAMIC_CACHE).then(cache => cache.put(req, networkResponse));
@@ -89,11 +108,6 @@ self.addEventListener('fetch', (event) => {
           caches.open(DYNAMIC_CACHE).then(cache => cache.put(req, responseToCache));
         }
         return networkResponse;
-      }).catch(() => {
-        // If navigating to an HTML page while offline, return cached index.html
-        if (req.headers.get('accept') && req.headers.get('accept').includes('text/html')) {
-          return caches.match('/index.html');
-        }
       });
     })
   );

@@ -7,6 +7,9 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
         console.log('[PWA] ServiceWorker registered with scope:', registration.scope);
+        
+        // Force immediate check for new Service Worker version on server
+        registration.update().catch(() => {});
 
         // Check for updates
         registration.addEventListener('updatefound', () => {
@@ -23,6 +26,12 @@ if ('serviceWorker' in navigator) {
       .catch((err) => {
         console.error('[PWA] ServiceWorker registration failed:', err);
       });
+  });
+
+  window.addEventListener('focus', () => {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg) reg.update();
+    });
   });
 
   // Handle incoming messages from ServiceWorker
