@@ -88,15 +88,15 @@
 
         <!-- Header Right Controls -->
         <div class="header-controls">
-          <!-- Persona Quick Switcher (6-Tier Hierarchy) -->
-          <div class="persona-switcher">
-            <span style="font-size:0.72rem; color:var(--text-muted); padding:0 4px;">Role:</span>
-            <button class="persona-btn active" data-role="MR" onclick="RepFlowApp.switchPersona('MR')">MR</button>
-            <button class="persona-btn" data-role="AM" onclick="RepFlowApp.switchPersona('AM')">AM</button>
-            <button class="persona-btn" data-role="RM" onclick="RepFlowApp.switchPersona('RM')">RM</button>
-            <button class="persona-btn" data-role="ZSM" onclick="RepFlowApp.switchPersona('ZSM')">ZSM</button>
-            <button class="persona-btn" data-role="HO" onclick="RepFlowApp.switchPersona('HO')">HO Admin</button>
-            <button class="persona-btn" data-role="SUPERADMIN" onclick="RepFlowApp.switchPersona('SUPERADMIN')">SaaS Admin</button>
+          <!-- Production Authenticated User Profile Bar -->
+          <div id="userProfileBar" class="persona-switcher" style="display:none; align-items:center; gap:8px; padding:4px 10px; background:#ffffff; border:1px solid var(--border-color); border-radius:var(--radius-md);">
+            <div style="display:flex; flex-direction:column; line-height:1.2;">
+              <span id="headerUserName" style="font-size:0.85rem; font-weight:800; color:var(--text-main);">SaaS System Admin</span>
+              <span id="headerUserRole" style="font-size:0.7rem; font-weight:700; color:var(--accent-blue);">SUPER_ADMIN</span>
+            </div>
+            <span id="headerTenantBadge" class="workspace-title-badge" style="font-size:0.72rem; padding:2px 8px; background:#f1f5f9; border-color:#cbd5e1;">🛡️ SaaS Platform Root</span>
+            <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="RepFlowApp.openChangePasswordModal()" title="Profile & Password Settings">⚙️ Settings</button>
+            <button class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem; background:var(--accent-rose); font-weight:700;" onclick="RepFlowApp.logout()">Sign Out 🚪</button>
           </div>
 
           <!-- Network & PWA Controls -->
@@ -128,6 +128,47 @@
 
       <!-- Main Container -->
       <main class="app-container">
+
+    <!-- ====================================================================
+         0. PRODUCTION AUTHENTICATION LOGIN SCREEN (/login)
+         ==================================================================== -->
+    <section id="tab-login" class="tab-content active" style="max-width:520px; margin:40px auto;">
+      <div class="panel-card" style="padding:32px; border-top:4px solid var(--accent-blue); box-shadow:var(--shadow-lg);">
+        <div style="text-align:center; margin-bottom:24px;">
+          <div style="width:56px; height:56px; background:var(--accent-blue); color:#ffffff; font-weight:800; font-size:24px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:12px; box-shadow:0 4px 14px rgba(2,132,199,0.3);">RF</div>
+          <h2 style="font-size:1.6rem; font-weight:800; color:var(--text-main); margin-bottom:4px;">RepFlow Enterprise OS</h2>
+          <div style="font-size:0.88rem; color:var(--text-muted);">Commercial Field Force Automation | Production Login</div>
+        </div>
+
+        <div id="loginErrorAlert" style="display:none; background:#ffe4e6; border:1px solid #f43f5e; color:#9f1239; padding:10px 14px; border-radius:var(--radius-md); font-size:0.85rem; font-weight:600; margin-bottom:20px;"></div>
+
+        <form id="loginForm" onsubmit="event.preventDefault(); RepFlowApp.handleLoginSubmit();">
+          <div class="form-group">
+            <label style="font-weight:700;">Email / User ID</label>
+            <input type="text" id="loginEmail" placeholder="admin@repflow.io or admin@company.com" required class="form-control" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label style="font-weight:700;">Password</label>
+            <div style="position:relative;">
+              <input type="password" id="loginPassword" placeholder="••••••••••••" required class="form-control" autocomplete="current-password" style="padding-right:40px;">
+              <button type="button" id="togglePasswordVisibilityBtn" onclick="RepFlowApp.togglePasswordVisibility()" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.9rem;" title="Toggle Password Visibility">👁️</button>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <label style="font-size:0.85rem; color:var(--text-muted); display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="loginRememberMe" checked style="width:auto;"> Remember Session (PWA Offline)
+            </label>
+          </div>
+          <button type="submit" id="loginSubmitBtn" class="btn btn-primary" style="width:100%; padding:12px; font-size:1rem; font-weight:700;">
+            Sign In to Enterprise Workspace 🔑
+          </button>
+        </form>
+
+        <div style="margin-top:24px; padding-top:16px; border-top:1px solid var(--border-color); font-size:0.78rem; color:var(--text-dim); text-align:center;">
+          🔒 Multi-Tenant Enterprise Security | Role-Based Access Control
+        </div>
+      </div>
+    </section>
 
     <!-- ====================================================================
          SYSTEM ADMIN CONTROL PANEL (/system-admin)
@@ -2321,6 +2362,32 @@
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
           <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeAddTemplateModal()">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Master Template</button>
+        </div>
+      </form>
+    </div>
+  <!-- Modal: Change Password & Security Profile -->
+  <div id="changePasswordModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="panel-header">
+        <h3 class="panel-title">🔑 Change Password & Security Settings</h3>
+        <button class="btn btn-secondary" onclick="RepFlowApp.closeChangePasswordModal()">✕</button>
+      </div>
+      <form id="changePasswordForm" onsubmit="event.preventDefault(); RepFlowApp.handleChangePasswordSubmit();">
+        <div class="form-group">
+          <label>Current Password</label>
+          <input type="password" id="changeCurrentPassword" placeholder="••••••••••••" required class="form-control">
+        </div>
+        <div class="form-group">
+          <label>New Password</label>
+          <input type="password" id="changeNewPassword" placeholder="At least 8 characters" required class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input type="password" id="changeConfirmPassword" placeholder="Confirm new password" required class="form-control">
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="RepFlowApp.closeChangePasswordModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Password</button>
         </div>
       </form>
     </div>

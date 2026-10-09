@@ -444,23 +444,35 @@ function initDatabaseSchema() {
 }
 
 function seedInitialData() {
-  db.get("SELECT COUNT(*) as count FROM tenants", (err, row) => {
-    if (row && row.count === 0) {
-      console.log('Seeding Multi-Tenant Pharma Organizations & SaaS Subscriptions...');
-      db.run(`INSERT INTO tenants (id, company_name, slug, subscription_tier) VALUES 
-        (1, 'Novis Pharma Ltd.', 'novis-pharma', 'ENTERPRISE'),
-        (2, 'Zeneca Lifesciences', 'zeneca-life', 'ENTERPRISE'),
-        (3, 'Apex Biotech Corp', 'apex-biotech', 'PRO')`);
+  // Enforce Clean Slate for Commercial Pilot
+  db.get("SELECT COUNT(*) as count FROM users WHERE role = 'SUPER_ADMIN'", (err, row) => {
+    if (!row || row.count === 0) {
+      console.log('Enforcing Clean Slate: Purging mock demo data & seeding root System Admin account (admin@repflow.io)...');
+      db.serialize(() => {
+        db.run("DELETE FROM tenants");
+        db.run("DELETE FROM tenant_subscriptions");
+        db.run("DELETE FROM tenant_licenses");
+        db.run("DELETE FROM users");
+        db.run("DELETE FROM doctors");
+        db.run("DELETE FROM chemists");
+        db.run("DELETE FROM distributors");
+        db.run("DELETE FROM hcp_approval_queue");
+        db.run("DELETE FROM product_catalog");
+        db.run("DELETE FROM clm_presentations");
+        db.run("DELETE FROM field_governance");
+        db.run("DELETE FROM virtual_sample_bags");
+        db.run("DELETE FROM gift_distributions");
+        db.run("DELETE FROM mtp_headers");
+        db.run("DELETE FROM mtp_days");
+        db.run("DELETE FROM expense_claims");
+        db.run("DELETE FROM leave_requests");
 
-      db.run(`INSERT INTO tenant_subscriptions (tenant_id, plan_tier, max_mr_seats, max_am_seats, monthly_price, billing_status, next_billing_date) VALUES 
-        (1, 'ENTERPRISE', 100, 20, 75000, 'ACTIVE', '2026-12-31'),
-        (2, 'ENTERPRISE', 50, 10, 49999, 'ACTIVE', '2026-12-31'),
-        (3, 'PRO', 25, 5, 25000, 'ACTIVE', '2026-12-31')`);
-
-      db.run(`INSERT INTO tenant_licenses (tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status) VALUES 
-        (1, 1, 1, 1, 1, 1, 100, 20, 250, 'ACTIVE'),
-        (2, 1, 1, 1, 1, 0, 50, 10, 100, 'ACTIVE'),
-        (3, 1, 0, 1, 0, 1, 25, 5, 50, 'TRIAL')`);
+        // Seed Exactly ONE Seeded Root System Admin Account
+        db.run(`INSERT INTO users (id, tenant_id, name, email, password, role, territory_code) VALUES 
+          (1, 0, 'SaaS System Admin', 'admin@repflow.io', 'RepFlow@SuperAdmin2026!', 'SUPER_ADMIN', 'PLATFORM-ROOT')`);
+        
+        console.log('Seeded root System Admin: admin@repflow.io | RepFlow@SuperAdmin2026!');
+      });
     }
   });
 
@@ -479,89 +491,6 @@ function seedInitialData() {
         ('VISIT_TYPE', 'JOINT', 'Joint Call', 'ABM / RBM accompaniment call')`);
     }
   });
-
-  db.get("SELECT COUNT(*) as count FROM product_catalog", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO product_catalog (tenant_id, brand_name, molecule, dosage_form, pack_size, pts, ptr, mrp, division) VALUES 
-        (1, 'GlycoCard-M 500', 'Metformin HCl 500mg + Glimepiride 2mg', 'Sustained Release Tablet', '10x15 Strips', 42.50, 51.00, 68.00, 'Cardio-Diab'),
-        (1, 'CardioVasc 10', 'Amlodipine 10mg + Telmisartan 40mg', 'Film Coated Tablet', '10x10 Strips', 55.00, 66.00, 88.00, 'Cardio-Diab'),
-        (1, 'NeuroCalm Forte', 'Pregabalin 75mg + Methylcobalamin 1500mcg', 'Hard Gelatin Capsule', '10x10 Capsules', 85.00, 102.00, 136.00, 'Neuro-Care'),
-        (1, 'OsteoFlex-D3', 'Calcium Carbonate 1250mg + Vit D3 2000IU', 'Chewable Tablet', '10x15 Tablets', 38.00, 45.60, 60.80, 'Ortho-Care'),
-        (1, 'GynaeFolic 5', 'L-Methylfolate 1mg + Pyridoxal-5-Phosphate', 'Tablet', '10x10 Strips', 48.00, 57.60, 76.80, 'Gynae-Care')`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM clm_presentations", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO clm_presentations (tenant_id, title, division, file_type, slides_count, offline_sync) VALUES 
-        (1, 'GlycoCard-M 2026 Clinical Evidence & Detailing Deck', 'Cardio-Diab', 'PDF', 14, 1),
-        (1, 'CardioVasc Multi-Center Hypertension Study', 'Cardio-Diab', 'ZIP', 22, 1),
-        (1, 'NeuroCalm Diabetic Neuropathy Detailing Deck', 'Neuro-Care', 'HTML5', 18, 1)`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM field_governance", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO field_governance (tenant_id, min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required) VALUES 
-        (1, 10, 4, 150, '23:59', 1),
-        (2, 12, 5, 200, '22:00', 1),
-        (3, 8, 3, 300, '23:59', 0)`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM hcp_approval_queue", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO hcp_approval_queue (tenant_id, mr_name, doctor_name, specialty, category, clinic_address, territory_code, status) VALUES 
-        (1, 'Rahul Sharma (MR)', 'Dr. Vikramaditya Sen', 'Cardiology', 'Core A', 'Suite 402, Max Super Specialty Hospital, Saket', 'T-GREATER-KAILASH', 'PENDING'),
-        (1, 'Neha Verma (MR)', 'Dr. Meenakshi Sundaram', 'Endocrinology', 'Semi-Core B', 'Clinic 12, Apollo Health Center, Nehru Place', 'T-NEHRU-PLACE', 'PENDING')`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO users (id, tenant_id, name, email, role, reporting_manager_id, territory_code) VALUES 
-        (1, 1, 'Priya Mehta', 'priya.ho@repflow.io', 'HO', NULL, 'HQ-GLOBAL'),
-        (2, 1, 'Ramesh Gupta', 'ramesh.zsm@repflow.io', 'ZSM', 1, 'Z-NORTH'),
-        (3, 1, 'Anita Sharma', 'anita.rm@repflow.io', 'RM', 2, 'R-DELHI-NCR'),
-        (4, 1, 'Vikram Singh', 'vikram.am@repflow.io', 'AM', 3, 'A-SOUTH-DELHI'),
-        (5, 1, 'Rahul Sharma', 'rahul.mr@repflow.io', 'MR', 4, 'T-GREATER-KAILASH'),
-        (6, 1, 'Neha Verma', 'neha.mr@repflow.io', 'MR', 4, 'T-NEHRU-PLACE')`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM doctors", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO doctors (tenant_id, code, name, specialty, category, hospital_clinic_name, preferred_time, prescribing_potential, territory_code, latitude, longitude, phone, email, clinic_address, area_name) VALUES 
-        (1, 'DOC-101', 'Dr. Rajesh Verma', 'Cardiology', 'Superstar', 'Max Super Specialty Hospital', '11:00 AM - 01:00 PM', '₹1,50,000/mo', 'T-GREATER-KAILASH', 28.5355, 77.2410, '+91 98100 11223', 'dr.rajesh@maxhealth.com', '1 Press Enclave Marg, Saket, New Delhi', 'Saket'),
-        (1, 'DOC-102', 'Dr. Sunita Rao', 'Endocrinology', 'A+', 'Fortis Escorts Heart Institute', '04:00 PM - 06:00 PM', '₹90,000/mo', 'T-GREATER-KAILASH', 28.5562, 77.2811, '+91 98200 33445', 'dr.sunita@fortis.com', 'Okhla Road, Near Sukhdev Vihar', 'Nehru Place'),
-        (1, 'DOC-103', 'Dr. Amit Kapoor', 'Neurology', 'A', 'Apollo Hospital Delhi', '02:00 PM - 04:00 PM', '₹75,000/mo', 'T-NEHRU-PLACE', 28.5398, 77.2842, '+91 98300 55667', 'dr.kapoor@apollo.com', 'Mathura Road, Sarita Vihar', 'Nehru Place')`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM chemists", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO chemists (tenant_id, code, name, contact_person, phone, territory_code) VALUES 
-        (1, 'CHM-501', 'MedPlus Pharmacy GK-1', 'Suresh Kumar', '+91 98765 43210', 'T-GREATER-KAILASH'),
-        (1, 'CHM-502', 'Apollo Pharmacy Nehru Place', 'Vikas Gupta', '+91 98111 22334', 'T-NEHRU-PLACE')`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM distributors", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO distributors (tenant_id, code, name, contact_person, phone, email, gstin, drug_license_no, territory_code, area_name) VALUES 
-        (1, 'DST-901', 'Delhi Pharma Distributors Pvt Ltd', 'Rakesh Sharma', '+91 11 2649 1000', 'orders@delhipharma.com', '07AAAAA0000A1Z5', 'DL-2026-DEL-101', 'T-GREATER-KAILASH', 'Saket'),
-        (1, 'DST-902', 'Northern Stockists & Agency', 'Manish Verma', '+91 11 4160 2000', 'supply@northernstockists.com', '07BBBBB1111B2Z6', 'DL-2026-DEL-102', 'T-NEHRU-PLACE', 'Nehru Place')`);
-    }
-  });
-
-  db.get("SELECT COUNT(*) as count FROM edetailing_product_slides", (err, row) => {
-    if (row && row.count === 0) {
-      db.run(`INSERT INTO edetailing_product_slides (tenant_id, product_name, slide_title, slide_subtitle, slide_sequence) VALUES 
-        (1, 'Cardia-90 10mg Catch Covers', 'Cardia-90 Phase-III Clinical Trial Results', '38% Reduction in Major Adverse Cardiovascular Events (MACE)', 1),
-        (1, 'Cardia-90 10mg Catch Covers', 'Superior Bioavailability & Peak Concentration', 'Peak Plasma Concentration in 1.2 Hours with 24-hr Control', 2),
-        (1, 'Glicla-M SR Starter Packs', 'Glicla-M SR Dual Action Glycemic Control', 'Mean HbA1c Reduction of 1.6% across 12-week trials', 1)`);
-    }
-  });
 }
 
 // -------------------------------------------------------------------
@@ -572,9 +501,93 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ONLINE',
     app: 'RepFlow Enterprise SaaS Server',
-    version: '8.0.0-SaaS',
+    version: '10.0.0-Commercial',
     tenant_id: req.tenant_id,
     tagline: 'The Offline-First Pharmaceutical Field Force Operating System'
+  });
+});
+
+// -------------------------------------------------------------------
+// AUTHENTICATION & SESSION MANAGEMENT API
+// -------------------------------------------------------------------
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email / User ID and password are required' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  db.get(`SELECT u.*, t.company_name as tenant_name 
+          FROM users u 
+          LEFT JOIN tenants t ON u.tenant_id = t.id 
+          WHERE LOWER(u.email) = ? AND u.password = ?`, [cleanEmail, password], (err, user) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid Email/User ID or Password. Access denied.' });
+    }
+
+    const token = `REPFLOW-TOKEN-${user.id}-${Date.now()}`;
+    const tenantTitle = user.tenant_name || (user.role === 'SUPER_ADMIN' ? 'SaaS Platform Root' : 'Enterprise Pharma Client');
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        tenant_id: user.tenant_id || 0,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        tenant_name: tenantTitle,
+        territory_code: user.territory_code || 'HQ-GLOBAL',
+        must_change_password: user.must_change_password || 0
+      }
+    });
+  });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const authHeader = req.headers['authorization'] || req.headers['x-user-id'];
+  if (!authHeader) {
+    return res.status(401).json({ success: false, error: 'Unauthenticated session' });
+  }
+
+  const userId = parseInt(authHeader.replace('Bearer ', '').replace('REPFLOW-TOKEN-', '').split('-')[0]) || 1;
+  db.get(`SELECT u.*, t.company_name as tenant_name FROM users u LEFT JOIN tenants t ON u.tenant_id = t.id WHERE u.id = ?`, [userId], (err, user) => {
+    if (err || !user) return res.status(401).json({ success: false, error: 'Session expired' });
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        tenant_id: user.tenant_id || 0,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        tenant_name: user.tenant_name || (user.role === 'SUPER_ADMIN' ? 'SaaS Platform Root' : 'Enterprise Pharma Client'),
+        territory_code: user.territory_code || 'HQ-GLOBAL',
+        must_change_password: user.must_change_password || 0
+      }
+    });
+  });
+});
+
+app.post('/api/auth/change-password', (req, res) => {
+  const { user_id, current_password, new_password } = req.body;
+  if (!user_id || !new_password) {
+    return res.status(400).json({ success: false, error: 'Missing mandatory fields for password update' });
+  }
+
+  db.get('SELECT * FROM users WHERE id = ?', [user_id], (err, user) => {
+    if (err || !user) return res.status(404).json({ success: false, error: 'User record not found' });
+    if (current_password && user.password !== current_password) {
+      return res.status(401).json({ success: false, error: 'Current password provided is incorrect' });
+    }
+
+    db.run('UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?', [new_password, user_id], (uerr) => {
+      if (uerr) return res.status(500).json({ success: false, error: uerr.message });
+      res.json({ success: true, message: 'Password updated successfully! Please use your new password on next login.' });
+    });
   });
 });
 
@@ -1056,40 +1069,47 @@ app.get('/api/superadmin/tenants', (req, res) => {
   });
 });
 
-app.post('/api/superadmin/tenants', (req, res) => {
+const handleOnboardTenant = (req, res) => {
   const { company_name, slug, plan_tier, max_mr_seats, max_am_seats, monthly_price, admin_name, admin_email, admin_password } = req.body;
   if (!company_name) return res.status(400).json({ error: 'Company Name is required' });
 
   const baseSlug = (slug || company_name).toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   const finalSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+  const seatsQuota = parseInt(max_mr_seats) || 20;
 
   db.run(`INSERT INTO tenants (company_name, slug, subscription_tier) VALUES (?, ?, ?)`,
-    [company_name, finalSlug, plan_tier || 'ENTERPRISE'],
+    [company_name, finalSlug, plan_tier || 'PILOT_3_MONTHS'],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const tenantId = this.lastID;
       
-      // 1. Insert Subscription Record
-      db.run(`INSERT INTO tenant_subscriptions (tenant_id, plan_tier, max_mr_seats, max_am_seats, monthly_price, billing_status, next_billing_date) VALUES (?, ?, ?, ?, ?, 'ACTIVE', '2026-09-30')`,
-        [tenantId, plan_tier || 'ENTERPRISE', parseInt(max_mr_seats) || 50, parseInt(max_am_seats) || 10, parseFloat(monthly_price) || 49999],
+      // 1. Insert Subscription Record (20 Seats Default for Pilot)
+      db.run(`INSERT INTO tenant_subscriptions (tenant_id, plan_tier, max_mr_seats, max_am_seats, monthly_price, billing_status, next_billing_date) VALUES (?, ?, ?, ?, ?, 'ACTIVE', '2027-01-01')`,
+        [tenantId, plan_tier || 'PILOT_3_MONTHS', seatsQuota, parseInt(max_am_seats) || 5, parseFloat(monthly_price) || 0],
         (serr) => {
-          // 2. Generate and Insert Tenant Admin (HO) User Credentials
-          const admName = admin_name || `${company_name} Admin`;
-          const admEmail = admin_email || `admin@${baseSlug}.com`;
-          const admPass = admin_password || `Admin@${Date.now().toString().slice(-4)}`;
+          // 2. Insert License Record
+          db.run(`INSERT INTO tenant_licenses (tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status) VALUES (?, 1, 1, 1, 1, 1, ?, 5, 100, 'ACTIVE')`,
+            [tenantId, seatsQuota]);
 
-          db.run(`INSERT INTO users (tenant_id, name, email, password, role, reporting_manager_id, territory_code) VALUES (?, ?, ?, ?, 'HO', NULL, 'HQ-GLOBAL')`,
+          // 3. Generate and Insert Primary Company Admin User Credentials
+          const admName = admin_name || `${company_name} HO Admin`;
+          const admEmail = (admin_email || `admin@${baseSlug}.com`).trim().toLowerCase();
+          const admPass = admin_password || `PilotPharma@2026`;
+
+          db.run(`INSERT INTO users (tenant_id, name, email, password, role, reporting_manager_id, territory_code) VALUES (?, ?, ?, ?, 'COMPANY_ADMIN', NULL, 'HQ-GLOBAL')`,
             [tenantId, admName, admEmail, admPass],
             (uerr) => {
               res.json({
+                success: true,
                 tenant_id: tenantId,
                 company_name: company_name,
                 slug: finalSlug,
+                max_seats: seatsQuota,
                 admin_name: admName,
                 admin_email: admEmail,
                 admin_password: admPass,
-                plan_tier: plan_tier || 'ENTERPRISE',
-                message: `Successfully onboarded "${company_name}"! Generated Tenant Admin credentials: UserID: ${admEmail} | Password: ${admPass}`
+                plan_tier: plan_tier || 'PILOT_3_MONTHS',
+                message: `Successfully provisioned "${company_name}" (${seatsQuota}-Seat Quota)! Company Admin created: ${admEmail}`
               });
             }
           );
@@ -1097,7 +1117,10 @@ app.post('/api/superadmin/tenants', (req, res) => {
       );
     }
   );
-});
+};
+
+app.post('/api/superadmin/tenants', handleOnboardTenant);
+app.post('/api/system-admin/tenants/onboard', handleOnboardTenant);
 
 app.get('/api/tenants', (req, res) => {
   db.all('SELECT * FROM tenants ORDER BY id ASC', [], (err, rows) => {
@@ -1132,20 +1155,38 @@ app.post('/api/users', (req, res) => {
   const { name, email, password, role, reporting_manager_id, territory_code } = req.body;
   if (!name || !email || !role) return res.status(400).json({ error: 'Name, Email and Role are required' });
 
-  db.run(`INSERT INTO users (tenant_id, name, email, password, role, reporting_manager_id, territory_code)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [req.tenant_id, name.trim(), email.trim(), password || 'repflow@123', role, reporting_manager_id ? parseInt(reporting_manager_id) : null, territory_code ? territory_code.trim() : 'HQ-GLOBAL'],
-    function(err) {
-      if (err) {
-        console.error('Error inserting user:', err);
-        return res.status(500).json({ error: err.message || 'Failed to create team member' });
+  const tenantId = req.tenant_id || 1;
+
+  // Enforce Tenant Seat Limit (20 Seats for Commercial Pilot)
+  db.get('SELECT COUNT(*) as count FROM users WHERE tenant_id = ?', [tenantId], (cerr, crow) => {
+    const activeCount = crow ? crow.count : 0;
+    db.get('SELECT COALESCE(max_mr_seats, 20) as max_seats FROM tenant_subscriptions WHERE tenant_id = ?', [tenantId], (serr, srow) => {
+      const maxSeats = srow ? srow.max_seats : 20;
+
+      if (activeCount >= maxSeats && role !== 'SUPER_ADMIN') {
+        return res.status(403).json({
+          error: `Seat Limit Reached (${activeCount}/${maxSeats} Active Seats). You cannot add user #${activeCount + 1}. Please contact SaaS System Admin (admin@repflow.io) to expand your enterprise quota.`
+        });
       }
-      res.json({
-        id: this.lastID,
-        message: `Successfully created ${role} user "${name}" (${email}) aligned with reporting manager!`
-      });
-    }
-  );
+
+      db.run(`INSERT INTO users (tenant_id, name, email, password, role, reporting_manager_id, territory_code)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [tenantId, name.trim(), email.trim().toLowerCase(), password || 'repflow@123', role, reporting_manager_id ? parseInt(reporting_manager_id) : null, territory_code ? territory_code.trim() : 'HQ-GLOBAL'],
+        function(err) {
+          if (err) {
+            console.error('Error inserting user:', err);
+            return res.status(500).json({ error: err.message || 'Failed to create team member' });
+          }
+          res.json({
+            id: this.lastID,
+            active_seats: activeCount + 1,
+            max_seats: maxSeats,
+            message: `Successfully created ${role} user "${name}" (${email})! Active Seats: ${activeCount + 1}/${maxSeats}`
+          });
+        }
+      );
+    });
+  });
 });
 
 app.delete('/api/users/:id', (req, res) => {

@@ -68,115 +68,240 @@ const RepFlowApp = (() => {
     'superadmin': '⚡ Legacy Super-Admin'
   };
 
+  let currentUser = null;
+  let authToken = null;
+
   async function init() {
-    console.log('[RepFlowApp] Initializing RepFlow SaaS Engine...');
+    console.log('[RepFlowApp] Initializing RepFlow Commercial SaaS Engine...');
     setupEventListeners();
-    await loadTenantsList();
-    await loadInitialData();
-    switchPersona('MR');
-  }
-
-  function setupEventListeners() {
-    window.addEventListener('online', updateNetworkStatus);
-    window.addEventListener('offline', updateNetworkStatus);
-    updateNetworkStatus();
-  }
-
-  function updateNetworkStatus() {
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    const offlineToggleBtn = document.getElementById('offlineToggleBtn');
-
-    if (navigator.onLine) {
-      if (statusDot) statusDot.className = 'status-dot';
-      if (statusText) statusText.innerText = 'Online';
-      if (offlineToggleBtn) offlineToggleBtn.style.background = '';
+    const hasSession = checkAuthSession();
+    if (hasSession) {
+      await loadTenantsList();
+      await loadInitialData();
+      setupAuthenticatedUI();
     } else {
-      if (statusDot) statusDot.className = 'status-dot offline';
-      if (statusText) statusText.innerText = 'Offline Mode Active';
-      if (offlineToggleBtn) offlineToggleBtn.style.background = 'var(--accent-rose)';
+      showLoginScreen();
     }
   }
 
-  function toggleOfflineSim() {
-    const isOffline = document.getElementById('statusDot').classList.contains('offline');
-    if (isOffline) {
-      document.getElementById('statusDot').className = 'status-dot';
-      document.getElementById('statusText').innerText = 'Online';
-      showToast('⚡ Simulating Online Mode. Data ready to sync.', 'info');
-    } else {
-      document.getElementById('statusDot').className = 'status-dot offline';
-      document.getElementById('statusText').innerText = 'Offline (Simulated)';
-      showToast('⚡ Simulating Offline Mode. Edits saved to IndexedDB.', 'warning');
-    }
-  }
-
-  function openModal(id) {
-    const m = document.getElementById(id);
-    if (m) {
-      m.classList.add('show');
-      m.classList.add('active');
-      m.style.display = 'flex';
-      m.style.opacity = '1';
-      m.style.pointerEvents = 'auto';
-    }
-  }
-
-  function closeModal(id) {
-    const m = document.getElementById(id);
-    if (m) {
-      m.classList.remove('show');
-      m.classList.remove('active');
-      m.style.display = 'none';
-      m.style.opacity = '0';
-      m.style.pointerEvents = 'none';
-    }
-  }
-
-  // -------------------------------------------------------------
-  // Dynamic Tenant Organization Selector & Switcher
-  // -------------------------------------------------------------
-  async function loadTenantsList() {
+  function checkAuthSession() {
     try {
-      const res = await fetch('/api/tenants');
-      if (res.ok) {
-        allTenantsCache = await res.json();
-        const select = document.getElementById('tenantSelect');
-        if (select && allTenantsCache.length > 0) {
-          select.innerHTML = allTenantsCache.map(t => `
-            <option value="${t.id}" ${t.id === activeTenantId ? 'selected' : ''}>${t.company_name}</option>
-          `).join('');
-        }
+      const savedToken = localStorage.getItem('repflow_auth_token');
+      const savedUser = localStorage.getItem('repflow_auth_user');
+      if (savedToken && savedUser) {
+        authToken = savedToken;
+        currentUser = JSON.parse(savedUser);
+        activeRole = currentUser.role || 'MR';
+        activeTenantId = currentUser.tenant_id || 0;
+        activeUser = currentUser;
+        return true;
       }
     } catch (e) {
-      console.warn('Failed loading tenants list', e);
+      console.warn('Failed parsing saved session', e);
+    }
+    return false;
+  }
+
+  function showLoginScreen() {
+    currentUser = null;
+    authToken = null;
+    localStorage.removeItem('repflow_auth_token');
+    localStorage.removeItem('repflow_auth_user');
+
+    const sidebar = document.getElementById('appSidebar');
+    const header = document.querySelector('.top-workspace-header');
+    const userBar = document.getElementById('userProfileBar');
+
+    if (sidebar) sidebar.style.display = 'none';
+    if (header) header.style.display = 'none';
+    if (userBar) userBar.style.display = 'none';
+
+    document.querySelectorAll('.tab-content').forEach(c => {
+      c.classList.toggle('active', c.id === 'tab-login');
+    });
+  }
+
+  async function setupAuthenticatedUI() {
+    const sidebar = document.getElementById('appSidebar');
+    const header = document.querySelector('.top-workspace-header');
+    const userBar = document.getElementById('userProfileBar');
+
+    if (sidebar) sidebar.style.display = 'flex';
+    if (header) header.style.display = 'flex';
+    if (userBar) userBar.style.display = 'flex';
+
+    // Update Header & Sidebar Badges
+    const userNameEl = document.getElementById('headerUserName');
+    const userRoleEl = document.getElementById('headerUserRole');
+    const tenantBadgeEl = document.getElementById('headerTenantBadge');
+    const sidebarRoleName = document.getElementById('sidebarUserRoleName');
+
+    if (userNameEl) userNameEl.innerText = currentUser.name || 'User';
+    if (userRoleEl) userRoleEl.innerText = currentUser.role || 'ROLE';
+    if (sidebarRoleName) sidebarRoleName.innerText = `${currentUser.name} (${currentUser.role})`;
+
+    const tenantTitle = currentUser.role === 'SUPER_ADMIN' ? '🛡️ SaaS Platform Root' : `🏢 ${currentUser.tenant_name || 'Enterprise Client'}`;
+    if (tenantBadgeEl) tenantBadgeEl.innerText = tenantTitle;
+
+    // Define Allowed Navigation Tabs Driven Strictly by Authenticated Role
+    let allowedTabs = [];
+    let initialTab = 'mr-dashboard';
+
+    if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SYSTEM_ADMIN') {
+      allowedTabs = ['system-admin-tenants', 'system-admin-licenses', 'system-admin-templates', 'system-admin-infrastructure'];
+      initialTab = 'system-admin-tenants';
+    } else if (currentUser.role === 'COMPANY_ADMIN' || currentUser.role === 'HO') {
+      allowedTabs = ['tenant-admin-territories', 'tenant-admin-hcp', 'tenant-admin-products', 'tenant-admin-governance', 'tenant-admin-reports', 'team-hierarchy'];
+      initialTab = 'tenant-admin-territories';
+    } else if (currentUser.role === 'ZSM') {
+      allowedTabs = ['zsm-portal', 'team-hierarchy', 'ho-yield-analytics', 'academic-roi', 'master'];
+      initialTab = 'zsm-portal';
+    } else if (currentUser.role === 'RM') {
+      allowedTabs = ['rm-portal', 'team-hierarchy', 'academic-roi', 'expenses', 'leaves', 'master'];
+      initialTab = 'rm-portal';
+    } else if (currentUser.role === 'AM') {
+      allowedTabs = ['am-dashboard', 'team-hierarchy', 'expenses', 'leaves', 'academic-roi', 'master'];
+      initialTab = 'am-dashboard';
+    } else { // MR / Field Staff
+      allowedTabs = ['mr-dashboard', 'dcr', 'edetailing', 'mtp', 'master', 'expenses', 'leaves', 'sample-bag', 'gifts', 'analytics'];
+      initialTab = 'mr-dashboard';
+    }
+
+    renderNavTabs(allowedTabs);
+    navigateToTab(initialTab);
+    refreshActiveTabData();
+
+    if (currentUser.must_change_password === 1) {
+      showToast('⚠️ Mandatory Password Reset: Please update your temporary password.', 'warning');
+      openChangePasswordModal();
     }
   }
 
-  async function switchTenant(tenantId) {
-    activeTenantId = parseInt(tenantId);
-    const tenantObj = allTenantsCache.find(t => t.id === activeTenantId);
-    const tenantName = tenantObj ? tenantObj.company_name : `Pharma Tenant #${tenantId}`;
+  async function handleLoginSubmit() {
+    const emailInput = document.getElementById('loginEmail');
+    const passwordInput = document.getElementById('loginPassword');
+    const errorAlert = document.getElementById('loginErrorAlert');
+    const submitBtn = document.getElementById('loginSubmitBtn');
 
-    const orgLabel = document.getElementById('hierarchyOrgName');
-    if (orgLabel) orgLabel.innerText = tenantName;
+    if (errorAlert) errorAlert.style.display = 'none';
+    if (!emailInput || !passwordInput) return;
 
-    document.title = `${tenantName} - RepFlow PWA Field Force OS`;
-    const themeMeta = document.querySelector('meta[name="theme-color"]');
-    if (themeMeta) themeMeta.setAttribute('content', activeTenantId === 1 ? '#070f1e' : '#0f2b48');
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
 
-    showToast(`🏢 Switched active Pharma Tenant to: "${tenantName}"`, 'info');
-    await loadInitialData();
-    refreshActiveTabData();
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Authenticating Session...';
+    }
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        authToken = data.token;
+        currentUser = data.user;
+        activeRole = currentUser.role;
+        activeTenantId = currentUser.tenant_id || 0;
+        activeUser = currentUser;
+
+        localStorage.setItem('repflow_auth_token', authToken);
+        localStorage.setItem('repflow_auth_user', JSON.stringify(currentUser));
+
+        await loadTenantsList();
+        await loadInitialData();
+        setupAuthenticatedUI();
+
+        showToast(`✅ Welcome, ${currentUser.name}! Logged in as ${currentUser.role}.`, 'success');
+      } else {
+        if (errorAlert) {
+          errorAlert.innerText = data.error || 'Authentication failed. Please verify email and password.';
+          errorAlert.style.display = 'block';
+        }
+      }
+    } catch (err) {
+      if (errorAlert) {
+        errorAlert.innerText = 'Network error connecting to RepFlow auth server.';
+        errorAlert.style.display = 'block';
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Sign In to Enterprise Workspace 🔑';
+      }
+    }
   }
 
-  function switchPersona(role) {
-    activeRole = role;
-    const config = PERSONA_CONFIG[role];
-    activeUser = { id: config.id, name: config.name, role: config.role, reportingManager: config.manager };
+  function logout() {
+    showLoginScreen();
+    showToast('🔒 Signed out of RepFlow Enterprise session.', 'info');
+  }
 
-    const userBadge = document.getElementById('sidebarUserRoleName');
-    if (userBadge) userBadge.innerText = `${config.name} (${role})`;
+  function togglePasswordVisibility() {
+    const passInput = document.getElementById('loginPassword');
+    const toggleBtn = document.getElementById('togglePasswordVisibilityBtn');
+    if (passInput) {
+      if (passInput.type === 'password') {
+        passInput.type = 'text';
+        if (toggleBtn) toggleBtn.innerText = '🙈';
+      } else {
+        passInput.type = 'password';
+        if (toggleBtn) toggleBtn.innerText = '👁️';
+      }
+    }
+  }
+
+  function openChangePasswordModal() {
+    openModal('changePasswordModal');
+  }
+
+  function closeChangePasswordModal() {
+    closeModal('changePasswordModal');
+  }
+
+  async function handleChangePasswordSubmit() {
+    const currentPass = document.getElementById('changeCurrentPassword').value;
+    const newPass = document.getElementById('changeNewPassword').value;
+    const confirmPass = document.getElementById('changeConfirmPassword').value;
+
+    if (newPass !== confirmPass) {
+      showToast('❌ New passwords do not match!', 'danger');
+      return;
+    }
+    if (newPass.length < 6) {
+      showToast('❌ Password must be at least 6 characters long.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          current_password: currentPass,
+          new_password: newPass
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        closeChangePasswordModal();
+        if (currentUser) currentUser.must_change_password = 0;
+        localStorage.setItem('repflow_auth_user', JSON.stringify(currentUser));
+        showToast('✅ Password changed successfully!', 'success');
+      } else {
+        showToast(`Error: ${data.error}`, 'danger');
+      }
+    } catch (err) {
+      showToast('Failed updating password', 'danger');
+    }
+  }
 
     renderNavTabs(config.tabs);
     navigateToTab(config.tabs[0]);
@@ -2383,6 +2508,12 @@ const RepFlowApp = (() => {
 
   const publicApi = {
     init,
+    handleLoginSubmit,
+    logout,
+    togglePasswordVisibility,
+    openChangePasswordModal,
+    closeChangePasswordModal,
+    handleChangePasswordSubmit,
     loadTenantsList,
     switchTenant,
     switchPersona,
