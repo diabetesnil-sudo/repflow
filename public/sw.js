@@ -1,6 +1,6 @@
-// RepFlow Multi-Tenant Enterprise PWA Service Worker (v11.0.0 Commercial Auth System Release)
-const CACHE_NAME = 'repflow-pwa-v11.0.0-auth-system-release';
-const DYNAMIC_CACHE = 'repflow-dynamic-v11.0.0-auth-system-release';
+// RepFlow Multi-Tenant Enterprise PWA Service Worker (v12.0.0 Split-Screen Auth Portal Release)
+const CACHE_NAME = 'repflow-pwa-v12.0.0-split-screen-auth-release';
+const DYNAMIC_CACHE = 'repflow-dynamic-v12.0.0-split-screen-auth-release';
 
 const STATIC_ASSETS = [
   '/',

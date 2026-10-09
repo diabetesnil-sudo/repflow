@@ -489,3 +489,149 @@ h1, h2, h3, h4, .brand-title { font-family: 'Outfit', sans-serif; }
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* ==========================================================================
+   Dedicated Split-Screen Authentication Portal (/login)
+   ========================================================================== */
+.login-split-portal {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background: var(--bg-page);
+}
+
+.login-hero-sidebar {
+  flex: 0 0 52%;
+  background: linear-gradient(135deg, #0f2744 0%, #16385c 50%, #0a1a2e 100%);
+  color: #ffffff;
+  padding: 48px 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-hero-sidebar::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(2, 132, 199, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.login-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.login-hero-image-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  margin-bottom: 28px;
+}
+
+.login-hero-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+.login-hero-img-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: linear-gradient(to top, rgba(15, 39, 68, 0.95), transparent);
+}
+
+.login-feature-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.login-feature-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(4px);
+}
+
+.login-feature-card .feature-icon {
+  font-size: 1.3rem;
+  background: rgba(2, 132, 199, 0.25);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.login-feature-card h4 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.login-feature-card p {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.login-trust-footer {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+  line-height: 1.5;
+}
+
+.login-form-area {
+  flex: 1;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+}
+
+.login-form-container {
+  max-width: 440px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .login-split-portal {
+    flex-direction: column;
+  }
+  .login-hero-sidebar {
+    flex: none;
+    padding: 32px 24px;
+  }
+  .login-hero-image-card {
+    display: none;
+  }
+  .login-form-area {
+    padding: 32px 20px;
+  }
+}

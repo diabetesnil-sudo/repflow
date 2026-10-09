@@ -111,13 +111,17 @@ const RepFlowApp = (() => {
     const sidebar = document.getElementById('appSidebar');
     const header = document.querySelector('.top-workspace-header');
     const userBar = document.getElementById('userProfileBar');
+    const appContainer = document.querySelector('.app-container');
 
     if (sidebar) sidebar.style.display = 'none';
     if (header) header.style.display = 'none';
     if (userBar) userBar.style.display = 'none';
+    if (appContainer) appContainer.style.padding = '0';
 
     document.querySelectorAll('.tab-content').forEach(c => {
-      c.classList.toggle('active', c.id === 'tab-login');
+      const isLogin = c.id === 'tab-login';
+      c.classList.toggle('active', isLogin);
+      c.style.display = isLogin ? 'block' : 'none';
     });
   }
 
@@ -125,10 +129,15 @@ const RepFlowApp = (() => {
     const sidebar = document.getElementById('appSidebar');
     const header = document.querySelector('.top-workspace-header');
     const userBar = document.getElementById('userProfileBar');
+    const appContainer = document.querySelector('.app-container');
 
     if (sidebar) sidebar.style.display = 'flex';
     if (header) header.style.display = 'flex';
     if (userBar) userBar.style.display = 'flex';
+    if (appContainer) appContainer.style.padding = '24px 20px';
+
+    const loginTab = document.getElementById('tab-login');
+    if (loginTab) loginTab.style.display = 'none';
 
     // Update Header & Sidebar Badges
     const userNameEl = document.getElementById('headerUserName');
@@ -336,7 +345,9 @@ const RepFlowApp = (() => {
     });
 
     document.querySelectorAll('.tab-content').forEach(c => {
-      c.classList.toggle('active', c.id === `tab-${tabId}`);
+      const isTarget = c.id === `tab-${tabId}`;
+      c.classList.toggle('active', isTarget);
+      c.style.display = isTarget ? 'block' : 'none';
     });
 
     // System Admin Control Panel Tabs
