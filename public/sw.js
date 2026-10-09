@@ -1,6 +1,6 @@
-// RepFlow Multi-Tenant Enterprise PWA Service Worker (v9.5.0 Admin Control Panel Release)
-const CACHE_NAME = 'repflow-pwa-v9.5.0-admin-ui';
-const DYNAMIC_CACHE = 'repflow-dynamic-v9.5.0-admin-ui';
+// RepFlow Multi-Tenant Enterprise PWA Service Worker (v10.0.0 Pharma Light Theme Release)
+const CACHE_NAME = 'repflow-pwa-v10.0.0-pharma-light-theme';
+const DYNAMIC_CACHE = 'repflow-dynamic-v10.0.0-pharma-light-theme';
 
 const STATIC_ASSETS = [
   '/',

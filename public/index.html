@@ -135,7 +135,7 @@
     
     <!-- 1. System Admin: Tenant Management (/system-admin/tenants) -->
     <section id="tab-system-admin-tenants" class="tab-content">
-      <div class="panel-card" style="background: linear-gradient(135deg, rgba(13, 27, 42, 0.95), rgba(124, 58, 237, 0.1));">
+      <div class="panel-card">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">🛡️ System Admin: Cross-Tenant Governance & Provisioning</h2>
@@ -144,39 +144,39 @@
             </div>
           </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="btn btn-primary" style="background:linear-gradient(135deg, #7c3aed, #4f46e5);" onclick="RepFlowApp.openOnboardTenantModal()">
+            <button class="btn btn-primary" onclick="RepFlowApp.openOnboardTenantModal()">
               + Onboard New Pharma Enterprise
             </button>
           </div>
         </div>
 
         <div class="grid-cols-4" style="margin-bottom:20px;">
-          <div class="stat-card" style="border-left-color:#7c3aed;">
-            <div class="stat-icon" style="color:#7c3aed; background:rgba(124,58,237,0.15);">🏢</div>
+          <div class="stat-card" style="border-left-color:var(--accent-blue);">
+            <div class="stat-icon" style="color:var(--accent-blue); background:#e0f2fe;">🏢</div>
             <div class="stat-info">
               <h4>Total Client Tenants</h4>
               <div class="stat-value" id="sysAdminCountTenants">3 Active</div>
             </div>
           </div>
-          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
-            <div class="stat-icon">💼</div>
+          <div class="stat-card" style="border-left-color:var(--accent-blue);">
+            <div class="stat-icon" style="color:var(--accent-blue); background:#e0f2fe;">💼</div>
             <div class="stat-info">
               <h4>Total MR Seats Assigned</h4>
               <div class="stat-value" id="sysAdminCountSeats">175 Seats</div>
             </div>
           </div>
-          <div class="stat-card" style="border-left-color:var(--accent-teal);">
-            <div class="stat-icon">💾</div>
+          <div class="stat-card" style="border-left-color:var(--accent-cyan);">
+            <div class="stat-icon" style="color:var(--accent-cyan); background:#e0f2fe;">💾</div>
             <div class="stat-info">
               <h4>CDN Storage Consumed</h4>
               <div class="stat-value">412.8 GB</div>
             </div>
           </div>
-          <div class="stat-card" style="border-left-color:var(--accent-amber);">
-            <div class="stat-icon">💳</div>
+          <div class="stat-card" style="border-left-color:var(--accent-gold);">
+            <div class="stat-icon" style="color:var(--accent-gold); background:var(--accent-gold-bg);">💳</div>
             <div class="stat-info">
               <h4>Platform Monthly ARR</h4>
-              <div class="stat-value">₹1,49,998</div>
+              <div class="stat-value" style="color:var(--accent-gold);">₹1,49,998</div>
             </div>
           </div>
         </div>
@@ -278,28 +278,28 @@
               Service Worker Deployment Controls, Storage Monitors & Immutable Audit Logs
             </div>
           </div>
-          <button class="btn btn-secondary" style="background:#f43f5e; color:#fff; border:none;" onclick="RepFlowApp.triggerGlobalCacheBust()">
+          <button class="btn btn-danger" style="padding:8px 16px; font-weight:700;" onclick="RepFlowApp.triggerGlobalCacheBust()">
             💥 Trigger Global PWA Cache Bust
           </button>
         </div>
 
         <div class="grid-cols-3" style="margin-bottom:24px;">
-          <div class="stat-card" style="border-left-color:var(--accent-teal);">
-            <div class="stat-icon">📲</div>
+          <div class="stat-card" style="border-left-color:var(--accent-blue);">
+            <div class="stat-icon" style="color:var(--accent-blue); background:#e0f2fe;">📲</div>
             <div class="stat-info">
               <h4>PWA Service Worker Build</h4>
-              <div class="stat-value" id="pwaBuildVerDisplay">v8.0.0</div>
+              <div class="stat-value" id="pwaBuildVerDisplay">v9.5.0-admin-ui</div>
             </div>
           </div>
           <div class="stat-card" style="border-left-color:var(--accent-emerald);">
-            <div class="stat-icon">🌐</div>
+            <div class="stat-icon" style="color:var(--accent-emerald-text); background:var(--accent-emerald-bg);">🌐</div>
             <div class="stat-info">
               <h4>Active SW Field Workers</h4>
               <div class="stat-value">342 Devices</div>
             </div>
           </div>
-          <div class="stat-card" style="border-left-color:var(--accent-amber);">
-            <div class="stat-icon">🗄️</div>
+          <div class="stat-card" style="border-left-color:var(--accent-gold);">
+            <div class="stat-icon" style="color:var(--accent-gold); background:var(--accent-gold-bg);">🗄️</div>
             <div class="stat-info">
               <h4>CDN Storage Pool</h4>
               <div class="stat-value">412.8 / 1500 GB</div>
