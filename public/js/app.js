@@ -149,6 +149,11 @@ const RepFlowApp = (() => {
     if (userRoleEl) userRoleEl.innerText = currentUser.role || 'ROLE';
     if (sidebarRoleName) sidebarRoleName.innerText = `${currentUser.name} (${currentUser.role})`;
 
+    const welcomeTitle = document.getElementById('dashboardWelcomeTitle');
+    const welcomeSubtext = document.getElementById('dashboardUserSubtext');
+    if (welcomeTitle) welcomeTitle.innerText = `Welcome, ${currentUser.name} (${currentUser.role})`;
+    if (welcomeSubtext) welcomeSubtext.innerHTML = `Territory: <strong style="color:var(--accent-teal);">${currentUser.territory_code || 'HQ-GLOBAL'}</strong> | Active Enterprise Session`;
+
     const tenantTitle = currentUser.role === 'SUPER_ADMIN' ? '🛡️ SaaS Platform Root' : `🏢 ${currentUser.tenant_name || 'Enterprise Client'}`;
     if (tenantBadgeEl) tenantBadgeEl.innerText = tenantTitle;
 
