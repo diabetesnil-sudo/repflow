@@ -546,14 +546,69 @@
       <div class="panel-card">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">📊 Executive Field Force Analytics & Performance KPIs</h2>
+            <h2 class="panel-title">📊 Executive Field Force Analytics & Dynamic Report Generator</h2>
             <div style="font-size:0.85rem; color:var(--text-muted);">
-              Real-time Field Coverage %, Joint Work Index & PWA Booked Secondary Orders
+              Configure Report Parameters, Analyze Territory Yields & Export Executive Performance Insights
             </div>
           </div>
-          <button class="btn btn-secondary" onclick="RepFlowApp.exportTableToCSV('tenantAdminPerformanceTable', 'Field_Force_Performance.csv')">
-            📥 Export Performance Report (CSV)
-          </button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary" style="background:linear-gradient(135deg, #00b4d8, #0077b6);" onclick="RepFlowApp.generateExecutiveReport()">
+              🚀 Run & Generate Analysis Report
+            </button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.exportTableToCSV('tenantAdminPerformanceTable', 'Executive_Field_Force_Report.csv')">
+              📥 Export CSV
+            </button>
+            <button class="btn btn-secondary" onclick="window.print()">
+              🖨️ Print PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- How to Prepare Reports Guided Help Card -->
+        <div style="background:rgba(0,180,216,0.08); border:1px solid rgba(0,180,216,0.25); border-radius:12px; padding:16px; margin-bottom:20px;">
+          <div style="display:flex; align-items:center; gap:10px; font-size:0.92rem; font-weight:700; color:var(--accent-teal); margin-bottom:8px;">
+            💡 How to Prepare & Export Executive Analytics Reports:
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; font-size:0.82rem; color:var(--text-muted);">
+            <div>1️⃣ <strong>Select Report Type:</strong> Choose between Coverage %, Joint Working, Missed Visits, or Secondary POB Sales.</div>
+            <div>2️⃣ <strong>Filter Territory:</strong> Select national overview or isolate specific sales headquarters.</div>
+            <div>3️⃣ <strong>Click Run Analysis:</strong> Click "Run & Generate Analysis Report" to compute live territory performance.</div>
+            <div>4️⃣ <strong>Export or Print:</strong> Export structured tabular data to Excel/CSV or print executive PDF.</div>
+          </div>
+        </div>
+
+        <!-- Interactive Report Parameters Console -->
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:24px;">
+          <h4 style="margin-bottom:12px; font-size:0.9rem; color:var(--text-main); font-weight:700;">⚙️ Report Parameters Console</h4>
+          <div class="grid-cols-3" style="gap:16px;">
+            <div class="form-group">
+              <label>Select Report Category</label>
+              <select id="reportCategorySelect" class="form-select" onchange="RepFlowApp.generateExecutiveReport()">
+                <option value="COVERAGE">🎯 Doctor Call Coverage & Visit Frequency Audit</option>
+                <option value="JOINT_WORK">👥 Joint Field Working Audit (AM + MR Collaboration)</option>
+                <option value="MISSED_VISITS">⚠️ Missed Doctor Visit Exception Report</option>
+                <option value="POB_SALES">🛒 Chemist Order Booking (POB) Secondary Sales</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Select Territory / Headquarters</label>
+              <select id="reportTerritorySelect" class="form-select" onchange="RepFlowApp.generateExecutiveReport()">
+                <option value="ALL">🌐 All Territories (National Overview)</option>
+                <option value="T-GREATER-KAILASH">T-GREATER-KAILASH (Rahul Sharma)</option>
+                <option value="T-NEHRU-PLACE">T-NEHRU-PLACE (Neha Verma)</option>
+                <option value="T-SAKET-CENTRAL">T-SAKET-CENTRAL (Amit Patel)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Select Time Horizon</label>
+              <select id="reportDateRangeSelect" class="form-select" onchange="RepFlowApp.generateExecutiveReport()">
+                <option value="CURRENT_MONTH">🗓️ Current Month (October 2026)</option>
+                <option value="LAST_MONTH">📅 Last Month (September 2026)</option>
+                <option value="QUARTER">📊 Current Quarter (Q3 2026)</option>
+                <option value="YEAR">📈 Year-To-Date (YTD 2026)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="grid-cols-4" style="margin-bottom:24px;">
@@ -587,18 +642,19 @@
           </div>
         </div>
 
-        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);">🗺️ Territory Breakdown & Representative Yield</h3>
+        <h3 style="margin-bottom:12px; font-size:1rem; color:var(--accent-teal);" id="reportResultsTitle">🗺️ Territory Breakdown & Representative Yield</h3>
         <div class="table-responsive">
           <table class="data-table" id="tenantAdminPerformanceTable">
             <thead>
-              <tr>
+              <tr id="reportTableHeaderRow">
                 <th>Territory Code</th>
                 <th>Medical Representative</th>
-                <th>Doctors Mapped</th>
+                <th>Doctors Targeted</th>
                 <th>Doctors Visited</th>
                 <th>Coverage %</th>
                 <th>Joint Calls</th>
                 <th>Chemist POB Value (₹)</th>
+                <th>Compliance Status</th>
               </tr>
             </thead>
             <tbody id="tenantAdminReportsTableBody">

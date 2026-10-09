@@ -1847,20 +1847,27 @@ const RepFlowApp = (() => {
       if (res.ok) {
         const licenses = await res.json();
         const tbody = document.getElementById('sysAdminLicensesTableBody');
+
+        const renderToggleBtn = (tenantId, key, isEnabled) => `
+          <button class="btn btn-sm" style="padding:4px 10px; font-size:0.75rem; border-radius:6px; font-weight:700; cursor:pointer; ${isEnabled ? 'background:rgba(16,185,129,0.2); color:#10b981; border:1px solid #10b981;' : 'background:rgba(244,63,94,0.2); color:#f43f5e; border:1px solid #f43f5e;'}" onclick="RepFlowApp.toggleTenantLicenseFlag(${tenantId}, '${key}', ${isEnabled ? 1 : 0})">
+            ${isEnabled ? '✅ Enabled' : '❌ Disabled'}
+          </button>
+        `;
+
         if (tbody) {
           tbody.innerHTML = licenses.map(l => `
             <tr>
               <td><strong>${l.company_name || 'Pharma Tenant #' + l.tenant_id}</strong></td>
               <td><span class="tag-badge" style="background:rgba(124,58,237,0.2); color:#a78bfa;">${l.tier || 'Enterprise'}</span></td>
-              <td>${l.e_detailing_clm ? '✅ Enabled' : '❌ Disabled'}</td>
-              <td>${l.secondary_sales ? '✅ Enabled' : '❌ Disabled'}</td>
-              <td>${l.sample_tracking ? '✅ Enabled' : '❌ Disabled'}</td>
-              <td>${l.geo_fencing ? '✅ Enabled' : '❌ Disabled'}</td>
-              <td>${l.tour_planning ? '✅ Enabled' : '❌ Disabled'}</td>
+              <td>${renderToggleBtn(l.tenant_id, 'e_detailing_clm', l.e_detailing_clm)}</td>
+              <td>${renderToggleBtn(l.tenant_id, 'secondary_sales', l.secondary_sales)}</td>
+              <td>${renderToggleBtn(l.tenant_id, 'sample_tracking', l.sample_tracking)}</td>
+              <td>${renderToggleBtn(l.tenant_id, 'geo_fencing', l.geo_fencing)}</td>
+              <td>${renderToggleBtn(l.tenant_id, 'tour_planning', l.tour_planning)}</td>
               <td>${l.max_mr_seats} Seats</td>
               <td>${l.max_cdn_storage_gb} GB</td>
               <td>
-                <button class="btn btn-sm btn-secondary" onclick="RepFlowApp.showToast('Updated licensing flags for ${l.company_name}', 'success')">Configure</button>
+                <button class="btn btn-sm btn-secondary" onclick="RepFlowApp.showToast('Entitlements updated for ${l.company_name}', 'info')">Allocated</button>
               </td>
             </tr>
           `).join('');
@@ -1868,6 +1875,24 @@ const RepFlowApp = (() => {
       }
     } catch (e) {
       console.warn('Failed loading system admin licenses', e);
+    }
+  }
+
+  async function toggleTenantLicenseFlag(tenantId, featureKey, currentStatus) {
+    const newStatus = currentStatus === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`/api/system-admin/licenses/${tenantId}/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feature_key: featureKey, enabled_status: newStatus })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(`⚙️ ${data.message}`, 'success');
+        loadSystemAdminLicenses();
+      }
+    } catch (e) {
+      showToast('Failed toggling tenant feature flag', 'error');
     }
   }
 
@@ -1882,8 +1907,8 @@ const RepFlowApp = (() => {
             <tr>
               <td>#TMP-${t.id}</td>
               <td><span class="tag-badge" style="background:rgba(0,180,216,0.2); color:#00b4d8;">${t.category}</span></td>
-              <td><code>${t.template_key}</code></td>
-              <td><strong>${t.name}</strong></td>
+              <td><code>${t.template_key || t.item_key || 'SPECIALTY'}</code></td>
+              <td><strong>${t.name || t.item_name || 'Cardiology'}</strong></td>
               <td>${t.description || '-'}</td>
             </tr>
           `).join('');
@@ -1896,25 +1921,29 @@ const RepFlowApp = (() => {
 
   async function loadSystemAdminInfrastructure() {
     try {
-      const res = await fetch('/api/system-admin/audit-logs');
+      const res = await fetch('/api/system-admin/infrastructure');
       if (res.ok) {
-        const logs = await res.json();
+        const data = await res.json();
+        const logs = data.audit_logs || [];
+        const verDisplay = document.getElementById('pwaBuildVerDisplay');
+        if (verDisplay) verDisplay.innerText = data.pwa_version || 'v9.5.0-admin-ui';
+
         const tbody = document.getElementById('sysAdminAuditLogsTableBody');
         if (tbody) {
           tbody.innerHTML = logs.map(l => `
             <tr>
               <td>#LOG-${l.id}</td>
               <td>${l.actor_email}</td>
-              <td><span class="tag-badge" style="background:rgba(245,158,11,0.2); color:#f59e0b;">${l.action_event}</span></td>
+              <td><span class="tag-badge" style="background:rgba(245,158,11,0.2); color:#f59e0b;">${l.action_event || l.action}</span></td>
               <td>Tenant #${l.tenant_id || 'Global'}</td>
               <td>${l.details || '-'}</td>
-              <td>${new Date(l.created_at).toLocaleString()}</td>
+              <td>${new Date(l.timestamp || l.created_at).toLocaleString()}</td>
             </tr>
           `).join('');
         }
       }
     } catch (e) {
-      console.warn('Failed loading system admin audit logs', e);
+      console.warn('Failed loading system admin infrastructure data', e);
     }
   }
 
@@ -1947,11 +1976,18 @@ const RepFlowApp = (() => {
 
   async function triggerGlobalCacheBust() {
     try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'CACHE_BUST' });
+      const res = await fetch('/api/system-admin/infrastructure/cache-bust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_tenant_id: 0 })
+      });
+      if (res.ok) {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'CACHE_BUST' });
+        }
+        showToast('💥 Global PWA Service Worker Cache Bust Triggered across 342 active field devices!', 'success');
+        loadSystemAdminInfrastructure();
       }
-      showToast('💥 Global PWA Service Worker Cache Bust Triggered across active devices!', 'success');
-      loadSystemAdminInfrastructure();
     } catch (e) {
       showToast('Cache bust signal emitted.', 'info');
     }
@@ -1969,7 +2005,7 @@ const RepFlowApp = (() => {
     const category = document.getElementById('templateCategory').value;
     const name = document.getElementById('templateName').value;
     const description = document.getElementById('templateDescription').value;
-    const template_key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const template_key = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
 
     try {
       const res = await fetch('/api/system-admin/templates', {
@@ -2091,9 +2127,10 @@ const RepFlowApp = (() => {
       const clmRes = await fetch('/api/tenant-admin/clm', { headers: { 'X-Tenant-ID': activeTenantId } });
       if (clmRes.ok) {
         const clm = await clmRes.json();
+        const clmDecks = Array.isArray(clm) ? clm : (clm.clm_presentations || []);
         const tbodyClm = document.getElementById('tenantAdminClmTableBody');
         if (tbodyClm) {
-          tbodyClm.innerHTML = clm.map(c => `
+          tbodyClm.innerHTML = clmDecks.map(c => `
             <tr>
               <td>#CLM-${c.id}</td>
               <td><strong>${c.title}</strong></td>
@@ -2108,7 +2145,8 @@ const RepFlowApp = (() => {
 
       const prodRes = await fetch('/api/tenant-admin/products', { headers: { 'X-Tenant-ID': activeTenantId } });
       if (prodRes.ok) {
-        const prods = await prodRes.json();
+        const prodsData = await prodRes.json();
+        const prods = Array.isArray(prodsData) ? prodsData : (prodsData.products || []);
         const tbodyProds = document.getElementById('tenantAdminProductsTableBody');
         if (tbodyProds) {
           tbodyProds.innerHTML = prods.map(p => `
@@ -2200,11 +2238,12 @@ const RepFlowApp = (() => {
       const res = await fetch('/api/tenant-admin/governance', { headers: { 'X-Tenant-ID': activeTenantId } });
       if (res.ok) {
         const gov = await res.json();
-        if (gov) {
-          if (document.getElementById('govMinDocCalls')) document.getElementById('govMinDocCalls').value = gov.min_doc_calls_per_day || 10;
-          if (document.getElementById('govMinChemCalls')) document.getElementById('govMinChemCalls').value = gov.min_chem_calls_per_day || 4;
-          if (document.getElementById('govGeofenceRadius')) document.getElementById('govGeofenceRadius').value = gov.geofence_radius_meters || 150;
-          if (document.getElementById('govDcrCutoff')) document.getElementById('govDcrCutoff').value = gov.dcr_cutoff_time || '23:59';
+        const policy = gov.policy || gov;
+        if (policy) {
+          if (document.getElementById('govMinDocCalls')) document.getElementById('govMinDocCalls').value = policy.min_doc_calls_per_day || policy.min_doctor_calls || 10;
+          if (document.getElementById('govMinChemCalls')) document.getElementById('govMinChemCalls').value = policy.min_chem_calls_per_day || policy.min_chemist_calls || 4;
+          if (document.getElementById('govGeofenceRadius')) document.getElementById('govGeofenceRadius').value = policy.geofence_radius_meters || 150;
+          if (document.getElementById('govDcrCutoff')) document.getElementById('govDcrCutoff').value = policy.dcr_cutoff_time || '23:59';
         }
       }
 
@@ -2233,10 +2272,10 @@ const RepFlowApp = (() => {
   }
 
   async function saveGovernancePolicyRules() {
-    const min_doc_calls_per_day = parseInt(document.getElementById('govMinDocCalls').value);
-    const min_chem_calls_per_day = parseInt(document.getElementById('govMinChemCalls').value);
-    const geofence_radius_meters = parseInt(document.getElementById('govGeofenceRadius').value);
-    const dcr_cutoff_time = document.getElementById('govDcrCutoff').value;
+    const min_doc_calls_per_day = parseInt(document.getElementById('govMinDocCalls').value) || 10;
+    const min_chem_calls_per_day = parseInt(document.getElementById('govMinChemCalls').value) || 4;
+    const geofence_radius_meters = parseInt(document.getElementById('govGeofenceRadius').value) || 150;
+    const dcr_cutoff_time = document.getElementById('govDcrCutoff').value || '23:59';
 
     try {
       const res = await fetch('/api/tenant-admin/governance', {
@@ -2245,7 +2284,8 @@ const RepFlowApp = (() => {
         body: JSON.stringify({ min_doc_calls_per_day, min_chem_calls_per_day, geofence_radius_meters, dcr_cutoff_time })
       });
       if (res.ok) {
-        showToast('⚖️ Field Governance Policies & DCR Rules Saved!', 'success');
+        showToast('⚖️ Field Governance Policies & DCR Rules Saved Successfully!', 'success');
+        loadTenantAdminGovernance();
       }
     } catch (e) {
       showToast('Failed saving governance rules.', 'error');
@@ -2253,27 +2293,45 @@ const RepFlowApp = (() => {
   }
 
   async function loadTenantAdminReports() {
+    await generateExecutiveReport();
+  }
+
+  async function generateExecutiveReport() {
+    const catSelect = document.getElementById('reportCategorySelect');
+    const terrSelect = document.getElementById('reportTerritorySelect');
+    const dateSelect = document.getElementById('reportDateRangeSelect');
+
+    const category = catSelect ? catSelect.value : 'COVERAGE';
+    const territory = terrSelect ? terrSelect.value : 'ALL';
+    const dateRange = dateSelect ? dateSelect.value : 'CURRENT_MONTH';
+
     try {
-      const res = await fetch('/api/analytics/roi-hierarchical', { headers: { 'X-Tenant-ID': activeTenantId } });
+      const res = await fetch(`/api/tenant-admin/reports?report_type=${category}&territory=${territory}&date_range=${dateRange}`, {
+        headers: { 'X-Tenant-ID': activeTenantId }
+      });
       if (res.ok) {
         const data = await res.json();
-        const tbody = document.getElementById('tenantAdminPerformanceTableBody');
-        if (tbody && data.regional_compilation) {
-          tbody.innerHTML = data.regional_compilation.map(r => `
+        const resultsTitle = document.getElementById('reportResultsTitle');
+        if (resultsTitle) resultsTitle.innerText = `📊 ${data.report_title || 'Territory Breakdown & Representative Yield'}`;
+
+        const tbody = document.getElementById('tenantAdminReportsTableBody');
+        if (tbody && data.rows) {
+          tbody.innerHTML = data.rows.map(r => `
             <tr>
-              <td><code>${r.territory || 'T-NCR-01'}</code></td>
-              <td><strong>${r.area_manager} (AM)</strong></td>
-              <td>28 Docs</td>
-              <td>26 Docs</td>
-              <td><span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981;">92.8%</span></td>
-              <td>${r.joint_calls || 8} Calls</td>
-              <td style="color:var(--accent-teal); font-weight:700;">₹${r.rx_yield.toLocaleString()}</td>
+              <td><code>${r.territory}</code></td>
+              <td><strong>${r.mr_name}</strong></td>
+              <td>${r.doctors_targeted} Docs</td>
+              <td>${r.doctors_visited} Docs</td>
+              <td><span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981;">${r.coverage_pct}%</span></td>
+              <td>${r.joint_calls} Calls</td>
+              <td style="color:var(--accent-teal); font-weight:700;">₹${r.pob_booked.toLocaleString()}</td>
+              <td><span class="tag-badge" style="background:rgba(0,180,216,0.2); color:#00b4d8;">${r.compliance_status}</span></td>
             </tr>
           `).join('');
         }
       }
     } catch (e) {
-      console.warn('Failed loading tenant admin reports', e);
+      console.warn('Failed generating executive report', e);
     }
   }
 
@@ -2415,6 +2473,7 @@ const RepFlowApp = (() => {
     // Admin Panel Controllers
     loadSystemAdminTenants,
     loadSystemAdminLicenses,
+    toggleTenantLicenseFlag,
     loadSystemAdminTemplates,
     loadSystemAdminInfrastructure,
     impersonateTenant,
@@ -2436,6 +2495,7 @@ const RepFlowApp = (() => {
     loadTenantAdminGovernance,
     saveGovernancePolicyRules,
     loadTenantAdminReports,
+    generateExecutiveReport,
     exportTableToCSV,
     showToast,
     refreshActiveTabData

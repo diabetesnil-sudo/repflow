@@ -1175,6 +1175,34 @@ app.get('/api/system-admin/licenses', (req, res) => {
   });
 });
 
+// System Admin: Licensing & Feature Flag Toggles
+app.get('/api/system-admin/licenses', (req, res) => {
+  db.all(`SELECT l.*, t.company_name, t.subscription_tier as tier FROM tenant_licenses l JOIN tenants t ON l.tenant_id = t.id ORDER BY l.tenant_id ASC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.put('/api/system-admin/licenses/:tenantId/toggle', (req, res) => {
+  const tenantId = parseInt(req.params.tenantId);
+  const { feature_key, enabled_status } = req.body;
+
+  const validKeys = ['e_detailing_clm', 'secondary_sales', 'sample_tracking', 'geo_fencing', 'tour_planning'];
+  if (!validKeys.includes(feature_key)) {
+    return res.status(400).json({ error: 'Invalid feature key specified' });
+  }
+
+  const newValue = enabled_status ? 1 : 0;
+  db.run(`UPDATE tenant_licenses SET ${feature_key} = ? WHERE tenant_id = ?`, [newValue, tenantId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.run(`INSERT INTO system_audit_logs (actor_email, action, tenant_id, details) VALUES ('superadmin@repflow.io', 'TOGGLE_FEATURE_FLAG', ?, ?)`,
+      [tenantId, `Toggled feature flag "${feature_key}" to ${newValue === 1 ? 'ENABLED' : 'DISABLED'} for Tenant #${tenantId}`]);
+
+    res.json({ message: `Successfully ${newValue === 1 ? 'enabled' : 'disabled'} "${feature_key}" for Tenant #${tenantId}`, tenant_id: tenantId, feature_key, new_value: newValue });
+  });
+});
+
 app.post('/api/system-admin/licenses', (req, res) => {
   const { tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status } = req.body;
   if (!tenant_id) return res.status(400).json({ error: 'Tenant ID required' });
@@ -1203,34 +1231,42 @@ app.post('/api/system-admin/licenses', (req, res) => {
   );
 });
 
-// System Admin: Global Master Templates
+// System Admin: Global Master Templates (with aliases for clean rendering)
 app.get('/api/system-admin/templates', (req, res) => {
-  db.all(`SELECT * FROM global_templates ORDER BY category ASC, id ASC`, [], (err, rows) => {
+  db.all(`SELECT id, category, item_key as template_key, item_key, item_name as name, item_name, description FROM global_templates ORDER BY category ASC, id ASC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    res.json(rows || []);
   });
 });
 
 app.post('/api/system-admin/templates', (req, res) => {
-  const { category, item_key, item_name, description } = req.body;
-  if (!category || !item_name) return res.status(400).json({ error: 'Category and Item Name required' });
+  const { category, template_key, name, item_key, item_name, description } = req.body;
+  const finalName = name || item_name;
+  if (!category || !finalName) return res.status(400).json({ error: 'Category and Name required' });
 
-  const key = item_key || item_name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  const key = template_key || item_key || finalName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
   db.run(`INSERT INTO global_templates (category, item_key, item_name, description) VALUES (?, ?, ?, ?)`,
-    [category, key, item_name, description || ''],
+    [category, key, finalName, description || ''],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, message: `Added template "${item_name}" to ${category}` });
+      res.json({ id: this.lastID, category, template_key: key, name: finalName, description, message: `Added template "${finalName}" to ${category}` });
     }
   );
 });
 
 // System Admin: Infrastructure & Audit Logs
+app.get('/api/system-admin/audit-logs', (req, res) => {
+  db.all(`SELECT * FROM system_audit_logs ORDER BY id DESC LIMIT 50`, [], (err, logs) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(logs || []);
+  });
+});
+
 app.get('/api/system-admin/infrastructure', (req, res) => {
   db.all(`SELECT * FROM system_audit_logs ORDER BY id DESC LIMIT 50`, [], (err, logs) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({
-      pwa_version: 'v8.0.0',
+      pwa_version: 'v9.5.0-admin-ui',
       active_service_workers: 342,
       cdn_storage_total_gb: 1500,
       cdn_storage_used_gb: 412.8,
@@ -1242,8 +1278,12 @@ app.get('/api/system-admin/infrastructure', (req, res) => {
 app.post('/api/system-admin/infrastructure/cache-bust', (req, res) => {
   const { target_tenant_id } = req.body;
   db.run(`INSERT INTO system_audit_logs (actor_email, action, tenant_id, details) VALUES ('superadmin@repflow.io', 'CACHE_BUST_TRIGGERED', ?, ?)`,
-    [target_tenant_id || 0, `Triggered PWA Cache Bust for ${target_tenant_id ? 'Tenant #' + target_tenant_id : 'GLOBAL PLATFORM'}`]);
-  res.json({ message: `PWA Service Worker cache bust signal dispatched for ${target_tenant_id ? 'Tenant #' + target_tenant_id : 'All Platform Tenants'}` });
+    [target_tenant_id || 0, `Triggered PWA Cache Bust for ${target_tenant_id ? 'Tenant #' + target_tenant_id : 'GLOBAL PLATFORM'}`],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: `PWA Service Worker cache bust signal dispatched for ${target_tenant_id ? 'Tenant #' + target_tenant_id : 'All Platform Tenants'}` });
+    }
+  );
 });
 
 app.post('/api/system-admin/impersonate', (req, res) => {
@@ -1275,6 +1315,35 @@ app.post('/api/system-admin/impersonate', (req, res) => {
 // -------------------------------------------------------------
 
 // Company Admin: HCP Doctor/Chemist Approval Queue
+app.get('/api/tenant-admin/hcp-approval-queue', (req, res) => {
+  db.all(`SELECT * FROM hcp_approval_queue WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (err, pendingQueue) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(pendingQueue || []);
+  });
+});
+
+app.put('/api/tenant-admin/hcp-approval-queue/:id', (req, res) => {
+  const queueId = parseInt(req.params.id);
+  const { status, action } = req.body;
+  const newStatus = status || (action === 'APPROVE' ? 'APPROVED' : 'REJECTED');
+
+  db.get(`SELECT * FROM hcp_approval_queue WHERE id = ? AND tenant_id = ?`, [queueId, req.tenant_id], (err, item) => {
+    if (err || !item) return res.status(404).json({ error: 'Request item not found' });
+
+    db.run(`UPDATE hcp_approval_queue SET status = ? WHERE id = ?`, [newStatus, queueId], function(uerr) {
+      if (uerr) return res.status(500).json({ error: uerr.message });
+
+      if (newStatus === 'APPROVED') {
+        const code = `DOC-${Date.now().toString().slice(-4)}`;
+        db.run(`INSERT INTO doctors (tenant_id, code, name, specialty, category, clinic_address, territory_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [req.tenant_id, code, item.doc_name || item.doctor_name, item.specialty || 'General', item.classification || 'Core A', item.clinic_address || 'HQ Clinic', item.territory || 'Delhi NCR']);
+      }
+
+      res.json({ message: `HCP Addition Request ${newStatus} for ${item.doc_name || item.doctor_name}` });
+    });
+  });
+});
+
 app.get('/api/tenant-admin/hcp', (req, res) => {
   db.all(`SELECT * FROM hcp_approval_queue WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (err, pendingQueue) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1292,38 +1361,36 @@ app.get('/api/tenant-admin/hcp', (req, res) => {
   });
 });
 
-app.post('/api/tenant-admin/hcp/approval-queue/:id/review', (req, res) => {
-  const queueId = parseInt(req.params.id);
-  const { action } = req.body;
-
-  db.get(`SELECT * FROM hcp_approval_queue WHERE id = ? AND tenant_id = ?`, [queueId, req.tenant_id], (err, item) => {
-    if (err || !item) return res.status(404).json({ error: 'Request item not found' });
-
-    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    db.run(`UPDATE hcp_approval_queue SET status = ? WHERE id = ?`, [newStatus, queueId], function(uerr) {
-      if (uerr) return res.status(500).json({ error: uerr.message });
-
-      if (action === 'APPROVE') {
-        const code = `DOC-${Date.now().toString().slice(-4)}`;
-        db.run(`INSERT INTO doctors (tenant_id, code, name, specialty, category, clinic_address, territory_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [req.tenant_id, code, item.doctor_name, item.specialty, item.category || 'Core A', item.clinic_address, item.territory_code]);
-      }
-
-      res.json({ message: `HCP Addition Request ${newStatus} for ${item.doctor_name}` });
-    });
+// Company Admin: Products & CLM Presentations
+app.get('/api/tenant-admin/clm', (req, res) => {
+  db.all(`SELECT id, title, division as therapeutic_division, file_type, slides_count, offline_sync as offline_sync_enabled FROM clm_presentations WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (cerr, clmDecks) => {
+    if (cerr) return res.status(500).json({ error: cerr.message });
+    res.json(clmDecks || []);
   });
 });
 
-// Company Admin: Products & CLM Presentations
+app.post('/api/tenant-admin/clm', (req, res) => {
+  const { title, therapeutic_division, division, file_type, slides_count, offline_sync_enabled, offline_sync } = req.body;
+  if (!title) return res.status(400).json({ error: 'Presentation Title required' });
+
+  const finalDiv = therapeutic_division || division || 'Cardio-Diab';
+  const isSync = offline_sync_enabled !== undefined ? offline_sync_enabled : (offline_sync ? 1 : 0);
+
+  db.run(`INSERT INTO clm_presentations (tenant_id, title, division, file_type, slides_count, offline_sync) VALUES (?, ?, ?, ?, ?, ?)`,
+    [req.tenant_id, title, finalDiv, file_type || 'PDF', parseInt(slides_count) || 12, isSync ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, title, therapeutic_division: finalDiv, file_type: file_type || 'PDF', slides_count, offline_sync_enabled: isSync, message: `Uploaded CLM Deck "${title}" for field detailing` });
+    }
+  );
+});
+
 app.get('/api/tenant-admin/products', (req, res) => {
   db.all(`SELECT * FROM product_catalog WHERE tenant_id = ? ORDER BY id ASC`, [req.tenant_id], (err, skus) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.all(`SELECT * FROM clm_presentations WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (cerr, clmDecks) => {
+    db.all(`SELECT id, title, division as therapeutic_division, file_type, slides_count, offline_sync as offline_sync_enabled FROM clm_presentations WHERE tenant_id = ? ORDER BY id DESC`, [req.tenant_id], (cerr, clmDecks) => {
       if (cerr) return res.status(500).json({ error: cerr.message });
-      res.json({
-        products: skus || [],
-        clm_presentations: clmDecks || []
-      });
+      res.json(skus || []);
     });
   });
 });
@@ -1336,20 +1403,7 @@ app.post('/api/tenant-admin/products', (req, res) => {
     [req.tenant_id, brand_name, molecule, dosage_form || 'Tablet', pack_size || '10x10 Strips', parseFloat(pts) || 50, parseFloat(ptr) || 60, parseFloat(mrp) || 80, division || 'Cardio-Diab'],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, message: `Added product SKU "${brand_name}" to Catalog` });
-    }
-  );
-});
-
-app.post('/api/tenant-admin/clm/upload', (req, res) => {
-  const { title, division, file_type, slides_count, offline_sync } = req.body;
-  if (!title) return res.status(400).json({ error: 'Presentation Title required' });
-
-  db.run(`INSERT INTO clm_presentations (tenant_id, title, division, file_type, slides_count, offline_sync) VALUES (?, ?, ?, ?, ?, ?)`,
-    [req.tenant_id, title, division || 'Cardio-Diab', file_type || 'PDF', parseInt(slides_count) || 12, offline_sync ? 1 : 0],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, message: `Uploaded CLM Deck "${title}" for field detailing` });
+      res.json({ id: this.lastID, brand_name, molecule, dosage_form, pack_size, pts, ptr, mrp, division, message: `Added product SKU "${brand_name}" to Catalog` });
     }
   );
 });
@@ -1360,8 +1414,8 @@ app.get('/api/tenant-admin/governance', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     const defaultPolicy = policy || {
       tenant_id: req.tenant_id,
-      min_doctor_calls: 10,
-      min_chemist_calls: 4,
+      min_doc_calls_per_day: 10,
+      min_chem_calls_per_day: 4,
       geofence_radius_meters: 150,
       dcr_cutoff_time: '23:59',
       mtp_approval_required: 1
@@ -1370,6 +1424,10 @@ app.get('/api/tenant-admin/governance', (req, res) => {
     db.all(`SELECT v.*, u.name as mr_name FROM virtual_sample_bags v JOIN users u ON v.mr_id = u.id WHERE v.tenant_id = ?`, [req.tenant_id], (serr, samples) => {
       res.json({
         policy: defaultPolicy,
+        min_doc_calls_per_day: defaultPolicy.min_doctor_calls || defaultPolicy.min_doc_calls_per_day || 10,
+        min_chem_calls_per_day: defaultPolicy.min_chemist_calls || defaultPolicy.min_chem_calls_per_day || 4,
+        geofence_radius_meters: defaultPolicy.geofence_radius_meters || 150,
+        dcr_cutoff_time: defaultPolicy.dcr_cutoff_time || '23:59',
         sample_dispatches: samples || []
       });
     });
@@ -1377,7 +1435,12 @@ app.get('/api/tenant-admin/governance', (req, res) => {
 });
 
 app.post('/api/tenant-admin/governance', (req, res) => {
-  const { min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required } = req.body;
+  const { min_doc_calls_per_day, min_chem_calls_per_day, min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required } = req.body;
+  const docCalls = parseInt(min_doc_calls_per_day || min_doctor_calls) || 10;
+  const chemCalls = parseInt(min_chem_calls_per_day || min_chemist_calls) || 4;
+  const radius = parseInt(geofence_radius_meters) || 150;
+  const cutoff = dcr_cutoff_time || '23:59';
+
   db.run(`INSERT INTO field_governance (tenant_id, min_doctor_calls, min_chemist_calls, geofence_radius_meters, dcr_cutoff_time, mtp_approval_required)
           VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(tenant_id) DO UPDATE SET
@@ -1386,28 +1449,64 @@ app.post('/api/tenant-admin/governance', (req, res) => {
             geofence_radius_meters = excluded.geofence_radius_meters,
             dcr_cutoff_time = excluded.dcr_cutoff_time,
             mtp_approval_required = excluded.mtp_approval_required`,
-    [req.tenant_id, parseInt(min_doctor_calls) || 10, parseInt(min_chemist_calls) || 4, parseInt(geofence_radius_meters) || 150, dcr_cutoff_time || '23:59', mtp_approval_required ? 1 : 0],
+    [req.tenant_id, docCalls, chemCalls, radius, cutoff, mtp_approval_required ? 1 : 0],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Field Governance Policy Rules updated successfully' });
+      res.json({ message: 'Field Governance Policy Rules updated successfully', min_doc_calls_per_day: docCalls, min_chem_calls_per_day: chemCalls, geofence_radius_meters: radius, dcr_cutoff_time: cutoff });
     }
   );
 });
 
-// Company Admin: Field Analytics & Governance KPIs
+// Company Admin: Field Analytics & Dynamic Executive Reports
 app.get('/api/tenant-admin/reports', (req, res) => {
+  const reportType = req.query.report_type || 'COVERAGE';
+  const territory = req.query.territory || 'ALL';
+  const dateRange = req.query.date_range || 'CURRENT_MONTH';
+
+  let reportTitle = 'Field Call Coverage & Visit Frequency Audit';
+  let reportsData = [
+    { territory: 'T-GREATER-KAILASH', mr_name: 'Rahul Sharma', doctors_targeted: 35, doctors_visited: 33, coverage_pct: 94.2, joint_calls: 6, pob_booked: 245000, compliance_status: 'EXCELLENT' },
+    { territory: 'T-NEHRU-PLACE', mr_name: 'Neha Verma', doctors_targeted: 30, doctors_visited: 27, coverage_pct: 90.0, joint_calls: 4, pob_booked: 185000, compliance_status: 'GOOD' },
+    { territory: 'T-SAKET-CENTRAL', mr_name: 'Amit Patel', doctors_targeted: 40, doctors_visited: 37, coverage_pct: 92.5, joint_calls: 7, pob_booked: 416500, compliance_status: 'EXCELLENT' }
+  ];
+
+  if (reportType === 'JOINT_WORK') {
+    reportTitle = 'Joint Field Working Audit (AM + MR Collaboration)';
+    reportsData = [
+      { territory: 'T-GREATER-KAILASH', mr_name: 'Rahul Sharma & Vikram Singh (AM)', doctors_targeted: 12, doctors_visited: 12, coverage_pct: 100.0, joint_calls: 12, pob_booked: 180000, compliance_status: 'VERIFIED' },
+      { territory: 'T-SAKET-CENTRAL', mr_name: 'Amit Patel & Vikram Singh (AM)', doctors_targeted: 10, doctors_visited: 9, coverage_pct: 90.0, joint_calls: 9, pob_booked: 210000, compliance_status: 'VERIFIED' }
+    ];
+  } else if (reportType === 'MISSED_VISITS') {
+    reportTitle = 'Missed Doctor Visit Exception Report';
+    reportsData = [
+      { territory: 'T-NEHRU-PLACE', mr_name: 'Neha Verma', doctors_targeted: 30, doctors_visited: 27, coverage_pct: 90.0, joint_calls: 4, pob_booked: 185000, compliance_status: '3 VISITS MISSED' }
+    ];
+  } else if (reportType === 'POB_SALES') {
+    reportTitle = 'Chemist Order Booking (POB) Secondary Sales Report';
+    reportsData = [
+      { territory: 'T-SAKET-CENTRAL', mr_name: 'Amit Patel', doctors_targeted: 40, doctors_visited: 37, coverage_pct: 92.5, joint_calls: 7, pob_booked: 416500, compliance_status: 'TOP PERFORMER' },
+      { territory: 'T-GREATER-KAILASH', mr_name: 'Rahul Sharma', doctors_targeted: 35, doctors_visited: 33, coverage_pct: 94.2, joint_calls: 6, pob_booked: 245000, compliance_status: 'TARGET MET' },
+      { territory: 'T-NEHRU-PLACE', mr_name: 'Neha Verma', doctors_targeted: 30, doctors_visited: 27, coverage_pct: 90.0, joint_calls: 4, pob_booked: 185000, compliance_status: 'TARGET MET' }
+    ];
+  }
+
+  if (territory !== 'ALL') {
+    reportsData = reportsData.filter(r => r.territory === territory);
+  }
+
   res.json({
+    report_type: reportType,
+    report_title: reportTitle,
+    territory,
+    date_range: dateRange,
+    generated_at: new Date().toISOString(),
     kpis: {
       call_coverage_pct: 92.4,
       joint_work_index: 8.6,
       missed_visits_count: 14,
       chemist_order_value_pwa: 846500
     },
-    territory_performance: [
-      { territory: 'T-GREATER-KAILASH', mr_name: 'Rahul Sharma', doctors_targeted: 35, doctors_visited: 33, coverage_pct: 94.2, joint_calls: 6, pob_booked: 245000 },
-      { territory: 'T-NEHRU-PLACE', mr_name: 'Neha Verma', doctors_targeted: 30, doctors_visited: 27, coverage_pct: 90.0, joint_calls: 4, pob_booked: 185000 },
-      { territory: 'T-SAKET-CENTRAL', mr_name: 'Amit Patel', doctors_targeted: 40, doctors_visited: 37, coverage_pct: 92.5, joint_calls: 7, pob_booked: 416500 }
-    ]
+    rows: reportsData
   });
 });
 
