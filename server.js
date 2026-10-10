@@ -444,11 +444,12 @@ function initDatabaseSchema() {
 }
 
 function seedInitialData() {
-  // Enforce Clean Slate for Commercial Pilot
-  db.get("SELECT COUNT(*) as count FROM users WHERE role = 'SUPER_ADMIN'", (err, row) => {
-    if (!row || row.count === 0) {
-      console.log('Enforcing Clean Slate: Purging mock demo data & seeding root System Admin account (admin@repflow.io)...');
-      db.serialize(() => {
+  console.log('Checking & seeding root System Admin account (admin@repflow.io)...');
+  db.serialize(() => {
+    // Purge legacy mock data if SUPER_ADMIN account is missing
+    db.get("SELECT * FROM users WHERE LOWER(email) = 'admin@repflow.io'", (err, adminUser) => {
+      if (!adminUser) {
+        console.log('Enforcing Clean Slate: Purging mock demo data & seeding root System Admin account...');
         db.run("DELETE FROM tenants");
         db.run("DELETE FROM tenant_subscriptions");
         db.run("DELETE FROM tenant_licenses");
@@ -467,13 +468,20 @@ function seedInitialData() {
         db.run("DELETE FROM expense_claims");
         db.run("DELETE FROM leave_requests");
 
-        // Seed Exactly ONE Seeded Root System Admin Account
-        db.run(`INSERT INTO users (id, tenant_id, name, email, password, role, territory_code) VALUES 
-          (1, 0, 'SaaS System Admin', 'admin@repflow.io', 'RepFlow@SuperAdmin2026!', 'SUPER_ADMIN', 'PLATFORM-ROOT')`);
-        
-        console.log('Seeded root System Admin: admin@repflow.io | RepFlow@SuperAdmin2026!');
-      });
-    }
+        // Seed root System Admin account
+        db.run("DELETE FROM users WHERE id = 1 OR LOWER(email) = 'admin@repflow.io'", () => {
+          db.run("INSERT INTO users (id, tenant_id, name, email, password, role, territory_code) VALUES (1, 0, 'SaaS System Admin', 'admin@repflow.io', 'RepFlow@SuperAdmin2026!', 'SUPER_ADMIN', 'PLATFORM-ROOT')", (ierr) => {
+            if (ierr) console.error('Error seeding root admin:', ierr.message);
+            else console.log('Successfully seeded root System Admin: admin@repflow.io | RepFlow@SuperAdmin2026!');
+          });
+        });
+      } else {
+        // Guarantee password and role are synchronized
+        db.run("UPDATE users SET password = 'RepFlow@SuperAdmin2026!', role = 'SUPER_ADMIN' WHERE LOWER(email) = 'admin@repflow.io'", (uerr) => {
+          console.log('System Admin account credentials verified: admin@repflow.io | RepFlow@SuperAdmin2026!');
+        });
+      }
+    });
   });
 
   db.get("SELECT COUNT(*) as count FROM global_templates", (err, row) => {
@@ -1205,20 +1213,27 @@ app.post('/api/notifications/trigger', (req, res) => {
 // System Admin Control Panel APIs (/system-admin)
 // -------------------------------------------------------------
 
-// System Admin: Licensing & Feature Flags
-app.get('/api/system-admin/licenses', (req, res) => {
-  db.all(`SELECT l.*, t.company_name, t.slug, t.subscription_tier 
-          FROM tenant_licenses l 
-          JOIN tenants t ON l.tenant_id = t.id 
-          ORDER BY l.tenant_id ASC`, [], (err, rows) => {
+// System Admin: Tenants Overview
+app.get('/api/system-admin/tenants', (req, res) => {
+  db.all(`SELECT t.*, t.slug as subdomain, 
+          COALESCE(s.plan_tier, t.subscription_tier, 'PILOT_3_MONTHS') as tier,
+          COALESCE(s.max_mr_seats + s.max_am_seats, 20) as max_seats,
+          (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.role = 'MR') as mr_seat_count,
+          'Active' as status
+          FROM tenants t 
+          LEFT JOIN tenant_subscriptions s ON t.id = s.tenant_id 
+          ORDER BY t.id ASC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    res.json(rows || []);
   });
 });
 
-// System Admin: Licensing & Feature Flag Toggles
+// System Admin: Licensing & Feature Flags
 app.get('/api/system-admin/licenses', (req, res) => {
-  db.all(`SELECT l.*, t.company_name, t.subscription_tier as tier FROM tenant_licenses l JOIN tenants t ON l.tenant_id = t.id ORDER BY l.tenant_id ASC`, [], (err, rows) => {
+  db.all(`SELECT l.*, t.company_name, t.slug, t.subscription_tier, t.subscription_tier as tier 
+          FROM tenant_licenses l 
+          JOIN tenants t ON l.tenant_id = t.id 
+          ORDER BY l.tenant_id ASC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });

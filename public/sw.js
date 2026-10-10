@@ -1,6 +1,6 @@
-// RepFlow Multi-Tenant Enterprise PWA Service Worker (v13.0.0 Auth Standalone Isolation Release)
-const CACHE_NAME = 'repflow-pwa-v13.0.0-auth-isolation-fix';
-const DYNAMIC_CACHE = 'repflow-dynamic-v13.0.0-auth-isolation-fix';
+// RepFlow Multi-Tenant Enterprise PWA Service Worker (v16.0.0 Auth Fixed Release)
+const CACHE_NAME = 'repflow-pwa-v16.0.0-auth-fixed';
+const DYNAMIC_CACHE = 'repflow-dynamic-v16.0.0-auth-fixed';
 
 const STATIC_ASSETS = [
   '/',

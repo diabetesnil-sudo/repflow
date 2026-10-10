@@ -33,7 +33,7 @@
   <div class="app-shell" id="appShell">
     
     <!-- Corporate Vertical Sidebar -->
-    <aside id="appSidebar" class="app-sidebar">
+    <aside id="appSidebar" class="app-sidebar" style="display:none;">
       <!-- Sidebar Header & Brand -->
       <div class="sidebar-header">
         <div class="brand-wrapper">
@@ -76,7 +76,7 @@
     <!-- Main Workspace Area -->
     <div class="main-wrapper">
       <!-- Top Workspace Bar -->
-      <header class="top-workspace-header">
+      <header class="top-workspace-header" style="display:none;">
         <div style="display:flex; align-items:center; gap:12px;">
           <button class="mobile-hamburger-btn" onclick="RepFlowApp.toggleMobileSidebar()">
             ☰ Menu
@@ -115,6 +115,8 @@
             </button>
           </div>
         </div>
+      </header>
+
       <!-- Impersonation Active Alert Banner -->
       <div id="impersonationBanner" style="display:none; background:linear-gradient(90deg, #7c3aed, #4f46e5); color:#ffffff; padding:10px 20px; align-items:center; justify-content:space-between; font-size:0.85rem; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2);">
         <div style="display:flex; align-items:center; gap:10px;">

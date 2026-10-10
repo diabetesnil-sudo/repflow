@@ -71,13 +71,81 @@ const RepFlowApp = (() => {
   let currentUser = null;
   let authToken = null;
 
+  function setupEventListeners() {
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+    updateNetworkStatus();
+  }
+
+  function updateNetworkStatus() {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const offlineToggleBtn = document.getElementById('offlineToggleBtn');
+
+    if (navigator.onLine) {
+      if (statusDot) statusDot.className = 'status-dot';
+      if (statusText) statusText.innerText = 'Online';
+      if (offlineToggleBtn) offlineToggleBtn.style.background = '';
+    } else {
+      if (statusDot) statusDot.className = 'status-dot offline';
+      if (statusText) statusText.innerText = 'Offline Mode Active';
+      if (offlineToggleBtn) offlineToggleBtn.style.background = 'var(--accent-rose)';
+    }
+  }
+
+  function toggleOfflineSim() {
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    const isOffline = dot && dot.classList.contains('offline');
+    if (isOffline) {
+      if (dot) dot.className = 'status-dot';
+      if (txt) txt.innerText = 'Online';
+      showToast('⚡ Simulating Online Mode. Data ready to sync.', 'info');
+    } else {
+      if (dot) dot.className = 'status-dot offline';
+      if (txt) txt.innerText = 'Offline (Simulated)';
+      showToast('⚡ Simulating Offline Mode. Edits saved to IndexedDB.', 'warning');
+    }
+  }
+
+  function openModal(id) {
+    const m = document.getElementById(id);
+    if (m) {
+      m.classList.add('show');
+      m.classList.add('active');
+      m.style.display = 'flex';
+      m.style.opacity = '1';
+      m.style.pointerEvents = 'auto';
+    }
+  }
+
+  function closeModal(id) {
+    const m = document.getElementById(id);
+    if (m) {
+      m.classList.remove('show');
+      m.classList.remove('active');
+      m.style.display = 'none';
+      m.style.opacity = '0';
+      m.style.pointerEvents = 'none';
+    }
+  }
+
   async function init() {
     console.log('[RepFlowApp] Initializing RepFlow Commercial SaaS Engine...');
-    setupEventListeners();
+    try {
+      setupEventListeners();
+    } catch (e) {
+      console.warn('setupEventListeners warning', e);
+    }
+
     const hasSession = checkAuthSession();
     if (hasSession) {
-      await loadTenantsList();
-      await loadInitialData();
+      try {
+        await loadTenantsList();
+        await loadInitialData();
+      } catch (e) {
+        console.warn('Initial session load error', e);
+      }
       setupAuthenticatedUI();
     } else {
       showLoginScreen();
@@ -227,8 +295,18 @@ const RepFlowApp = (() => {
         localStorage.setItem('repflow_auth_token', authToken);
         localStorage.setItem('repflow_auth_user', JSON.stringify(currentUser));
 
-        await loadTenantsList();
-        await loadInitialData();
+        try {
+          await loadTenantsList();
+        } catch (e) {
+          console.warn('loadTenantsList error during login', e);
+        }
+
+        try {
+          await loadInitialData();
+        } catch (e) {
+          console.warn('loadInitialData error during login', e);
+        }
+
         setupAuthenticatedUI();
 
         showToast(`✅ Welcome, ${currentUser.name}! Logged in as ${currentUser.role}.`, 'success');
@@ -246,7 +324,7 @@ const RepFlowApp = (() => {
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerText = 'Sign In to Enterprise Workspace 🔑';
+        submitBtn.innerText = 'Sign In to Enterprise Workspace ➔';
       }
     }
   }
@@ -317,12 +395,58 @@ const RepFlowApp = (() => {
     }
   }
 
+  // -------------------------------------------------------------
+  // Dynamic Tenant Organization Selector & Switcher
+  // -------------------------------------------------------------
+  async function loadTenantsList() {
+    try {
+      const res = await fetch('/api/tenants');
+      if (res.ok) {
+        allTenantsCache = await res.json();
+        const select = document.getElementById('tenantSelect');
+        if (select && allTenantsCache.length > 0) {
+          select.innerHTML = allTenantsCache.map(t => `
+            <option value="${t.id}" ${t.id === activeTenantId ? 'selected' : ''}>${t.company_name}</option>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading tenants list', e);
+    }
+  }
+
+  async function switchTenant(tenantId) {
+    activeTenantId = parseInt(tenantId);
+    const tenantObj = allTenantsCache.find(t => t.id === activeTenantId);
+    const tenantName = tenantObj ? tenantObj.company_name : `Pharma Tenant #${tenantId}`;
+
+    const orgLabel = document.getElementById('hierarchyOrgName');
+    if (orgLabel) orgLabel.innerText = tenantName;
+
+    document.title = `${tenantName} - RepFlow PWA Field Force OS`;
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', activeTenantId === 1 ? '#070f1e' : '#0f2b48');
+
+    showToast(`🏢 Switched active Pharma Tenant to: "${tenantName}"`, 'info');
+    await loadInitialData();
+    refreshActiveTabData();
+  }
+
+  function switchPersona(role) {
+    activeRole = role;
+    const config = PERSONA_CONFIG[role] || PERSONA_CONFIG.MR;
+    activeUser = { id: config.id, name: config.name, role: config.role, reportingManager: config.manager };
+
+    const userBadge = document.getElementById('sidebarUserRoleName');
+    if (userBadge) userBadge.innerText = `${config.name} (${role})`;
+
     renderNavTabs(config.tabs);
     navigateToTab(config.tabs[0]);
     refreshActiveTabData();
 
     showToast(`Switched active persona to ${config.name} (${role})`, 'info');
   }
+
 
   function renderNavTabs(tabs) {
     const container = document.getElementById('navTabs');
