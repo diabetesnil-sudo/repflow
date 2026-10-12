@@ -159,8 +159,14 @@ const RepFlowApp = (() => {
       if (savedToken && savedUser) {
         authToken = savedToken;
         currentUser = JSON.parse(savedUser);
-        activeRole = currentUser.role || 'MR';
-        activeTenantId = currentUser.tenant_id || 0;
+        const savedTenantId = localStorage.getItem('repflow_active_tenant_id');
+        if (savedTenantId !== null && savedTenantId !== '' && savedTenantId !== 'undefined') {
+          activeTenantId = parseInt(savedTenantId);
+        } else {
+          activeTenantId = currentUser.tenant_id || 0;
+        }
+        const savedRole = localStorage.getItem('repflow_active_role');
+        activeRole = savedRole || currentUser.role || 'MR';
         activeUser = currentUser;
         return true;
       }
@@ -175,6 +181,9 @@ const RepFlowApp = (() => {
     authToken = null;
     localStorage.removeItem('repflow_auth_token');
     localStorage.removeItem('repflow_auth_user');
+    localStorage.removeItem('repflow_active_tenant_id');
+    localStorage.removeItem('repflow_active_role');
+    localStorage.removeItem('repflow_active_tab');
 
     const sidebar = document.getElementById('appSidebar');
     const header = document.querySelector('.top-workspace-header');
@@ -249,6 +258,11 @@ const RepFlowApp = (() => {
       initialTab = 'mr-dashboard';
     }
 
+    const savedTab = localStorage.getItem('repflow_active_tab');
+    if (savedTab && allowedTabs.includes(savedTab)) {
+      initialTab = savedTab;
+    }
+
     renderNavTabs(allowedTabs);
     navigateToTab(initialTab);
     refreshActiveTabData();
@@ -294,6 +308,13 @@ const RepFlowApp = (() => {
 
         localStorage.setItem('repflow_auth_token', authToken);
         localStorage.setItem('repflow_auth_user', JSON.stringify(currentUser));
+        localStorage.setItem('repflow_active_tenant_id', String(activeTenantId));
+        localStorage.setItem('repflow_active_role', activeRole);
+        if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SYSTEM_ADMIN') {
+          localStorage.setItem('repflow_active_tab', 'system-admin-tenants');
+        } else if (currentUser.role === 'COMPANY_ADMIN' || currentUser.role === 'HO') {
+          localStorage.setItem('repflow_active_tab', 'tenant-admin-territories');
+        }
 
         try {
           await loadTenantsList();
@@ -400,9 +421,23 @@ const RepFlowApp = (() => {
   // -------------------------------------------------------------
   async function loadTenantsList() {
     try {
+      const cached = await RepFlowDB.getCachedTenants();
+      if (cached && cached.length > 0) {
+        allTenantsCache = cached;
+        const select = document.getElementById('tenantSelect');
+        if (select) {
+          select.innerHTML = allTenantsCache.map(t => `
+            <option value="${t.id}" ${t.id === activeTenantId ? 'selected' : ''}>${t.company_name}</option>
+          `).join('');
+        }
+      }
+    } catch (e) {}
+
+    try {
       const res = await fetch('/api/tenants');
       if (res.ok) {
         allTenantsCache = await res.json();
+        await RepFlowDB.saveTenantsToCache(allTenantsCache);
         const select = document.getElementById('tenantSelect');
         if (select && allTenantsCache.length > 0) {
           select.innerHTML = allTenantsCache.map(t => `
@@ -417,6 +452,7 @@ const RepFlowApp = (() => {
 
   async function switchTenant(tenantId) {
     activeTenantId = parseInt(tenantId);
+    localStorage.setItem('repflow_active_tenant_id', String(activeTenantId));
     const tenantObj = allTenantsCache.find(t => t.id === activeTenantId);
     const tenantName = tenantObj ? tenantObj.company_name : `Pharma Tenant #${tenantId}`;
 
@@ -434,6 +470,7 @@ const RepFlowApp = (() => {
 
   function switchPersona(role) {
     activeRole = role;
+    localStorage.setItem('repflow_active_role', role);
     const config = PERSONA_CONFIG[role] || PERSONA_CONFIG.MR;
     activeUser = { id: config.id, name: config.name, role: config.role, reportingManager: config.manager };
 
@@ -469,6 +506,7 @@ const RepFlowApp = (() => {
   }
 
   function navigateToTab(tabId) {
+    localStorage.setItem('repflow_active_tab', tabId);
     document.querySelectorAll('.nav-tab').forEach(t => {
       t.classList.toggle('active', t.dataset.tab === tabId);
     });
@@ -662,66 +700,95 @@ const RepFlowApp = (() => {
   // -------------------------------------------------------------
   // Team & Organizational Hierarchy Management
   // -------------------------------------------------------------
+  function renderTeamHierarchyTable(users) {
+    if (!Array.isArray(users)) return;
+    // Update counts
+    const hoCount = users.filter(u => u.role === 'HO' || u.role === 'SUPERADMIN' || u.role === 'COMPANY_ADMIN' || u.role === 'SUPER_ADMIN').length;
+    const srCount = users.filter(u => u.role === 'ZSM' || u.role === 'RM').length;
+    const amCount = users.filter(u => u.role === 'AM').length;
+    const mrCount = users.filter(u => u.role === 'MR').length;
+
+    const hoEl = document.getElementById('countHoUsers');
+    const srEl = document.getElementById('countSeniorManagers');
+    const amEl = document.getElementById('countAmUsers');
+    const mrEl = document.getElementById('countMrUsers');
+    if (hoEl) hoEl.innerText = `${hoCount} Admin`;
+    if (srEl) srEl.innerText = `${srCount} Active`;
+    if (amEl) amEl.innerText = `${amCount} Active`;
+    if (mrEl) mrEl.innerText = `${mrCount} Active`;
+
+    const fieldUsers = users.filter(u => ['RM', 'AM', 'MR'].includes(u.role));
+    const activeSeats = fieldUsers.length;
+    const seatsCountEl = document.getElementById('tenantAdminSeatsCount');
+    if (seatsCountEl) seatsCountEl.innerText = `${activeSeats} / 20 Seats Active`;
+    const cardSeatQuota = document.getElementById('cardSeatQuotaDisplay');
+    if (cardSeatQuota) cardSeatQuota.innerText = `${activeSeats} / 20 Seats Active`;
+
+    const tbody = document.getElementById('teamHierarchyTableBody');
+    if (tbody) {
+      if (users.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">No team members created yet. Click <strong>+ Add New Team Member</strong> to build your organization hierarchy.</td></tr>`;
+      } else {
+        tbody.innerHTML = users.map(u => {
+          const roleColors = {
+            HO: 'background:var(--accent-teal); color:#04101e;',
+            COMPANY_ADMIN: 'background:var(--accent-teal); color:#04101e;',
+            ZSM: 'background:var(--accent-blue); color:white;',
+            RM: 'background:var(--accent-emerald); color:#04101e;',
+            AM: 'background:var(--accent-amber); color:#04101e;',
+            MR: 'background:rgba(255,255,255,0.15); color:white;',
+            SUPERADMIN: 'background:var(--accent-rose); color:white;',
+            SUPER_ADMIN: 'background:var(--accent-rose); color:white;'
+          };
+
+          const mgrText = u.reporting_manager_name 
+            ? `<strong>${u.reporting_manager_name}</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${u.reporting_manager_role || ''})</span>`
+            : `<span style="color:var(--text-dim);">Top Level / None</span>`;
+
+          return `
+            <tr>
+              <td><strong>#${u.id}</strong></td>
+              <td><strong>${u.name || u.full_name}</strong></td>
+              <td><code>${u.email}</code></td>
+              <td><span style="font-family:monospace; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px;">${u.password || 'repflow@123'}</span></td>
+              <td><span class="tag-badge" style="${roleColors[u.role] || ''}">${u.role}</span></td>
+              <td>${mgrText}</td>
+              <td><span class="tag-badge" style="background:var(--bg-input);">${u.territory_code || u.territory || 'HQ'}</span></td>
+              <td>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <button class="btn btn-secondary" style="padding:2px 8px; font-size:0.75rem;" onclick="RepFlowApp.impersonateUser(${u.id}, '${(u.name || '').replace(/'/g, "\\'")}', '${u.role}')">Login As 👤</button>
+                  <button class="btn btn-secondary" style="padding:2px 6px; font-size:0.75rem; color:var(--accent-rose); border-color:rgba(239,68,68,0.3);" onclick="RepFlowApp.deleteTeamMember(${u.id}, '${(u.name || '').replace(/'/g, "\\'")}')" title="Remove Member">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  }
+
   async function loadTeamHierarchyData() {
+    // 1. Immediate cache re-hydration
     try {
-      const res = await fetch('/api/users', { headers: { 'X-Tenant-ID': activeTenantId } });
+      const cached = await RepFlowDB.getCachedUsers(activeTenantId);
+      if (cached && cached.length > 0) {
+        currentTenantUsersCache = cached;
+        renderTeamHierarchyTable(cached);
+      }
+    } catch (e) {}
+
+    // 2. Fetch live data
+    try {
+      const res = await fetch('/api/users', {
+        headers: {
+          'X-Tenant-ID': activeTenantId,
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        }
+      });
       if (res.ok) {
         currentTenantUsersCache = await res.json();
-
-        // Update counts
-        const hoCount = currentTenantUsersCache.filter(u => u.role === 'HO' || u.role === 'SUPERADMIN').length;
-        const srCount = currentTenantUsersCache.filter(u => u.role === 'ZSM' || u.role === 'RM').length;
-        const amCount = currentTenantUsersCache.filter(u => u.role === 'AM').length;
-        const mrCount = currentTenantUsersCache.filter(u => u.role === 'MR').length;
-
-        const hoEl = document.getElementById('countHoUsers');
-        const srEl = document.getElementById('countSeniorManagers');
-        const amEl = document.getElementById('countAmUsers');
-        const mrEl = document.getElementById('countMrUsers');
-        if (hoEl) hoEl.innerText = `${hoCount} Admin`;
-        if (srEl) srEl.innerText = `${srCount} Active`;
-        if (amEl) amEl.innerText = `${amCount} Active`;
-        if (mrEl) mrEl.innerText = `${mrCount} Active`;
-
-        const tbody = document.getElementById('teamHierarchyTableBody');
-        if (tbody) {
-          if (currentTenantUsersCache.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">No team members created yet. Click <strong>+ Add New Team Member</strong> to build your organization hierarchy.</td></tr>`;
-          } else {
-            tbody.innerHTML = currentTenantUsersCache.map(u => {
-              const roleColors = {
-                HO: 'background:var(--accent-teal); color:#04101e;',
-                ZSM: 'background:var(--accent-blue); color:white;',
-                RM: 'background:var(--accent-emerald); color:#04101e;',
-                AM: 'background:var(--accent-amber); color:#04101e;',
-                MR: 'background:rgba(255,255,255,0.15); color:white;',
-                SUPERADMIN: 'background:var(--accent-rose); color:white;'
-              };
-
-              const mgrText = u.reporting_manager_name 
-                ? `<strong>${u.reporting_manager_name}</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${u.reporting_manager_role})</span>`
-                : `<span style="color:var(--text-dim);">Top Level / None</span>`;
-
-              return `
-                <tr>
-                  <td><strong>#${u.id}</strong></td>
-                  <td><strong>${u.name}</strong></td>
-                  <td><code>${u.email}</code></td>
-                  <td><span style="font-family:monospace; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px;">${u.password || 'repflow@123'}</span></td>
-                  <td><span class="tag-badge" style="${roleColors[u.role] || ''}">${u.role}</span></td>
-                  <td>${mgrText}</td>
-                  <td><span class="tag-badge" style="background:var(--bg-input);">${u.territory_code || 'HQ'}</span></td>
-                  <td>
-                    <div style="display:flex; gap:6px; align-items:center;">
-                      <button class="btn btn-secondary" style="padding:2px 8px; font-size:0.75rem;" onclick="RepFlowApp.impersonateUser(${u.id}, '${(u.name || '').replace(/'/g, "\\'")}', '${u.role}')">Login As 👤</button>
-                      <button class="btn btn-secondary" style="padding:2px 6px; font-size:0.75rem; color:var(--accent-rose); border-color:rgba(239,68,68,0.3);" onclick="RepFlowApp.deleteTeamMember(${u.id}, '${(u.name || '').replace(/'/g, "\\'")}')" title="Remove Member">🗑️</button>
-                    </div>
-                  </td>
-                </tr>
-              `;
-            }).join('');
-          }
-        }
+        await RepFlowDB.saveUsersToCache(activeTenantId, currentTenantUsersCache);
+        renderTeamHierarchyTable(currentTenantUsersCache);
       }
     } catch (e) {
       console.warn('Failed loading team hierarchy data', e);
@@ -771,11 +838,15 @@ const RepFlowApp = (() => {
     try {
       const res = await fetch(`/api/users/${userId}`, {
         method: 'DELETE',
-        headers: { 'X-Tenant-ID': activeTenantId }
+        headers: {
+          'X-Tenant-ID': activeTenantId,
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        }
       });
       if (res.ok) {
         showToast(`🗑️ Removed ${name} from organizational hierarchy`, 'info');
         await loadTeamHierarchyData();
+        await loadTenantAdminTerritories();
       } else {
         const err = await res.json();
         showToast(`Error deleting member: ${err.error}`, 'danger');
@@ -792,23 +863,23 @@ const RepFlowApp = (() => {
 
     let eligibleManagers = [];
     if (selectedRole === 'MR') {
-      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'AM' || u.role === 'RM' || u.role === 'HO');
+      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'AM' || u.role === 'RM' || u.role === 'HO' || u.role === 'COMPANY_ADMIN');
     } else if (selectedRole === 'AM') {
-      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'RM' || u.role === 'ZSM' || u.role === 'HO');
+      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'RM' || u.role === 'ZSM' || u.role === 'HO' || u.role === 'COMPANY_ADMIN');
     } else if (selectedRole === 'RM') {
-      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'ZSM' || u.role === 'HO');
+      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'ZSM' || u.role === 'HO' || u.role === 'COMPANY_ADMIN');
     } else if (selectedRole === 'ZSM') {
-      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'HO');
+      eligibleManagers = currentTenantUsersCache.filter(u => u.role === 'HO' || u.role === 'COMPANY_ADMIN');
     }
 
     if (eligibleManagers.length > 0) {
       mgrSelect.innerHTML = eligibleManagers.map(m => `
-        <option value="${m.id}">${m.name} (${m.role} - ${m.territory_code || 'HQ'})</option>
+        <option value="${m.id}">${m.name || m.full_name} (${m.role} - ${m.territory_code || m.territory || 'HQ'})</option>
       `).join('');
       if (mgrGroup) mgrGroup.style.display = 'block';
     } else {
       mgrSelect.innerHTML = `<option value="">None (Top Level Organization Admin)</option>`;
-      if (mgrGroup) mgrGroup.style.display = selectedRole === 'HO' ? 'none' : 'block';
+      if (mgrGroup) mgrGroup.style.display = (selectedRole === 'HO' || selectedRole === 'COMPANY_ADMIN') ? 'none' : 'block';
     }
   }
 
@@ -820,18 +891,27 @@ const RepFlowApp = (() => {
     const password = document.getElementById('teamUserPassword').value;
     const managerId = document.getElementById('teamUserReportingManager').value;
     const territory = document.getElementById('teamUserTerritory').value;
+    const divisionEl = document.getElementById('teamUserDivision');
+    const division = divisionEl ? divisionEl.value : 'Cardio-Diabetology';
 
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': activeTenantId },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': activeTenantId,
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
         body: JSON.stringify({
           name,
+          full_name: name,
           role,
           email,
           password,
           reporting_manager_id: managerId ? parseInt(managerId) : null,
-          territory_code: territory
+          territory_code: territory,
+          headquarters_base: territory,
+          therapeutic_division: division
         })
       });
 
@@ -840,6 +920,7 @@ const RepFlowApp = (() => {
         showToast(`🎉 ${data.message}`, 'success');
         closeCreateTeamMemberModal();
         await loadTeamHierarchyData();
+        await loadTenantAdminTerritories();
       } else {
         const err = await res.json();
         showToast(`Error creating member: ${err.error}`, 'danger');
@@ -2055,54 +2136,68 @@ const RepFlowApp = (() => {
   // System Admin Control Panel (/system-admin)
   // -------------------------------------------------------------
   async function loadSystemAdminTenants() {
+    // 1. Immediate cache re-hydration
+    try {
+      const cached = await RepFlowDB.getCachedTenants();
+      if (cached && cached.length > 0) {
+        renderSystemAdminTenantsTable(cached);
+      }
+    } catch (e) {}
+
+    // 2. Fetch live data
     try {
       const res = await fetch('/api/system-admin/tenants');
       if (res.ok) {
         const tenants = await res.json();
-        const tbody = document.getElementById('sysAdminTenantsTableBody');
-        const countTenants = document.getElementById('sysAdminCountTenants');
-        const countSeats = document.getElementById('sysAdminCountSeats');
-
-        if (countTenants) countTenants.innerText = `${tenants.length} Active`;
-
-        let totalSeats = 0;
-        tenants.forEach(t => totalSeats += (t.mr_seat_count || 0));
-        if (countSeats) countSeats.innerText = `${totalSeats} Seats`;
-
-        if (tbody) {
-          tbody.innerHTML = tenants.map(t => {
-            const statusBadge = t.status === 'Active' 
-              ? '<span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981; border:1px solid #10b981;">Active</span>' 
-              : '<span class="tag-badge" style="background:rgba(244,63,94,0.2); color:#f43f5e; border:1px solid #f43f5e;">Suspended</span>';
-            
-            const isImpersonating = activeImpersonation && activeImpersonation.tenantId === t.id;
-
-            return `
-              <tr>
-                <td>#TEN-${t.id}</td>
-                <td><strong>${t.company_name}</strong><br><small style="color:var(--text-muted);">${t.therapeutic_focus || 'Cardio-Diab & General'}</small></td>
-                <td><code>${t.subdomain}.repflow.com</code></td>
-                <td><span class="tag-badge" style="background:rgba(124,58,237,0.2); color:#a78bfa;">${t.tier || 'Enterprise'}</span></td>
-                <td>${t.mr_seat_count || 50} Assigned / ${t.max_seats || 100} Quota</td>
-                <td>${statusBadge}</td>
-                <td>
-                  ${isImpersonating ? `
-                    <button class="btn btn-sm" style="background:#f43f5e; color:#fff;" onclick="RepFlowApp.exitImpersonation()">
-                      Exit Session 🚪
-                    </button>
-                  ` : `
-                    <button class="btn btn-sm" style="background:linear-gradient(135deg, #7c3aed, #4f46e5); color:#fff;" onclick="RepFlowApp.impersonateTenant(${t.id}, '${t.company_name}')">
-                      Login as Tenant Admin 🕵️
-                    </button>
-                  `}
-                </td>
-              </tr>
-            `;
-          }).join('');
-        }
+        await RepFlowDB.saveTenantsToCache(tenants);
+        renderSystemAdminTenantsTable(tenants);
       }
     } catch (e) {
       console.warn('Failed loading system admin tenants', e);
+    }
+  }
+
+  function renderSystemAdminTenantsTable(tenants) {
+    const tbody = document.getElementById('sysAdminTenantsTableBody');
+    const countTenants = document.getElementById('sysAdminCountTenants');
+    const countSeats = document.getElementById('sysAdminCountSeats');
+
+    if (countTenants) countTenants.innerText = `${tenants.length} Active`;
+
+    let totalSeats = 0;
+    tenants.forEach(t => totalSeats += (t.mr_seat_count || t.seat_quota || 20));
+    if (countSeats) countSeats.innerText = `${totalSeats} Seats`;
+
+    if (tbody) {
+      tbody.innerHTML = tenants.map(t => {
+        const statusBadge = (t.status || 'Active').toLowerCase() === 'active' 
+          ? '<span class="tag-badge" style="background:rgba(16,185,129,0.2); color:#10b981; border:1px solid #10b981;">Active</span>' 
+          : '<span class="tag-badge" style="background:rgba(244,63,94,0.2); color:#f43f5e; border:1px solid #f43f5e;">Suspended</span>';
+        
+        const isImpersonating = activeImpersonation && activeImpersonation.tenantId === t.id;
+
+        return `
+          <tr>
+            <td>#TEN-${t.id}</td>
+            <td><strong>${t.company_name}</strong><br><small style="color:var(--text-muted);">${t.therapeutic_focus || 'Cardio-Diab & General'}</small></td>
+            <td><code>${t.subdomain || t.slug}.repflow.com</code></td>
+            <td><span class="tag-badge" style="background:rgba(124,58,237,0.2); color:#a78bfa;">${t.tier || t.subscription_tier || 'PILOT_3_MONTHS'}</span></td>
+            <td>${t.mr_seat_count || t.seat_quota || 20} Seats Assigned / ${t.seat_quota || 20} Quota</td>
+            <td>${statusBadge}</td>
+            <td>
+              ${isImpersonating ? `
+                <button class="btn btn-sm" style="background:#f43f5e; color:#fff;" onclick="RepFlowApp.exitImpersonation()">
+                  Exit Session 🚪
+                </button>
+              ` : `
+                <button class="btn btn-sm" style="background:linear-gradient(135deg, #7c3aed, #4f46e5); color:#fff;" onclick="RepFlowApp.impersonateTenant(${t.id}, '${(t.company_name || '').replace(/'/g, "\\'")}')">
+                  Login as Tenant Admin 🕵️
+                </button>
+              `}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
   }
 
@@ -2291,27 +2386,80 @@ const RepFlowApp = (() => {
   // -------------------------------------------------------------
   // Company Admin Control Panel (/tenant-admin)
   // -------------------------------------------------------------
+  function renderTenantAdminTerritoriesTable(users) {
+    if (!Array.isArray(users)) return;
+    const tbody = document.getElementById('tenantAdminTerritoriesTableBody');
+    if (tbody) {
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">No field staff members provisioned yet. Click <strong>+ Add Staff Member</strong> to build your organization hierarchy.</td></tr>';
+      } else {
+        tbody.innerHTML = users.map(u => `
+          <tr>
+            <td>#USR-${u.id}</td>
+            <td><strong>${u.name || u.full_name}</strong><br><small style="color:var(--text-muted);">${u.email || u.username || 'staff@pharma.com'}</small></td>
+            <td><span class="tag-badge" style="background:rgba(0,245,212,0.15); color:#00f5d4;">${u.role}</span></td>
+            <td>${u.therapeutic_division || 'Cardio-Diab'}</td>
+            <td>${u.territory || u.territory_code || u.headquarters_base || 'HQ-GLOBAL'}</td>
+            <td>${u.reporting_manager_name ? `<strong>${u.reporting_manager_name}</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${u.reporting_manager_role || ''})</span>` : '<span style="color:var(--text-dim);">Top Level / None</span>'}</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" onclick="RepFlowApp.impersonateUser(${u.id}, '${(u.name || '').replace(/'/g, "\\'")}', '${u.role}')">Edit Staff</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    // Calculate Seat Quota & Role Counts
+    // Field hierarchy seats: RM, AM, MR
+    const fieldUsers = users.filter(u => ['RM', 'AM', 'MR'].includes(u.role));
+    const activeSeats = fieldUsers.length;
+    const maxSeats = 20;
+
+    const rmCount = users.filter(u => u.role === 'RM').length;
+    const amCount = users.filter(u => u.role === 'AM').length;
+    const mrCount = users.filter(u => u.role === 'MR').length;
+
+    const seatsCountEl = document.getElementById('tenantAdminSeatsCount');
+    if (seatsCountEl) seatsCountEl.innerText = `${activeSeats} / ${maxSeats} Seats Active`;
+
+    const cardSeatQuota = document.getElementById('cardSeatQuotaDisplay');
+    if (cardSeatQuota) cardSeatQuota.innerText = `${activeSeats} / ${maxSeats} Seats Active`;
+
+    const countRm = document.getElementById('countTenantRm');
+    if (countRm) countRm.innerText = `${rmCount} Active`;
+
+    const countAm = document.getElementById('countTenantAm');
+    if (countAm) countAm.innerText = `${amCount} Active`;
+
+    const countMr = document.getElementById('countTenantMr');
+    if (countMr) countMr.innerText = `${mrCount} Active`;
+  }
+
   async function loadTenantAdminTerritories() {
+    // 1. Re-hydrate immediately from IndexedDB / localStorage cache
     try {
-      const res = await fetch('/api/users', { headers: { 'X-Tenant-ID': activeTenantId } });
+      const cached = await RepFlowDB.getCachedUsers(activeTenantId);
+      if (cached && cached.length > 0) {
+        currentTenantUsersCache = cached;
+        renderTenantAdminTerritoriesTable(cached);
+      }
+    } catch (e) {
+      console.warn('Cached users hydration error:', e);
+    }
+
+    // 2. Fetch live data from backend
+    try {
+      const res = await fetch('/api/users', {
+        headers: {
+          'X-Tenant-ID': activeTenantId,
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        }
+      });
       if (res.ok) {
         const users = await res.json();
-        const tbody = document.getElementById('tenantAdminTerritoriesTableBody');
-        if (tbody) {
-          tbody.innerHTML = users.map(u => `
-            <tr>
-              <td>#USR-${u.id}</td>
-              <td><strong>${u.name}</strong><br><small style="color:var(--text-muted);">${u.email || u.username || 'staff@pharma.com'}</small></td>
-              <td><span class="tag-badge" style="background:rgba(0,245,212,0.15); color:#00f5d4;">${u.role}</span></td>
-              <td>${u.therapeutic_division || 'Cardio-Diab'}</td>
-              <td>${u.territory || u.headquarters || 'Delhi East HQ'}</td>
-              <td>${u.reporting_manager_name || 'N/A'}</td>
-              <td>
-                <button class="btn btn-sm btn-secondary" onclick="RepFlowApp.impersonateUser(${u.id})">Edit Staff</button>
-              </td>
-            </tr>
-          `).join('');
-        }
+        currentTenantUsersCache = users;
+        await RepFlowDB.saveUsersToCache(activeTenantId, users);
+        renderTenantAdminTerritoriesTable(users);
       }
     } catch (e) {
       console.warn('Failed loading tenant admin territories', e);

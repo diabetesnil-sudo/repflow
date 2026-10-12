@@ -9,6 +9,7 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'repflow.db');
+const SNAPSHOT_PATH = path.join(__dirname, 'repflow_snapshot.json');
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -18,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Multi-Tenant Middleware
 app.use((req, res, next) => {
   const tenantIdHeader = req.headers['x-tenant-id'] || req.query.tenant_id;
-  req.tenant_id = tenantIdHeader ? parseInt(tenantIdHeader) : 1;
+  req.tenant_id = tenantIdHeader !== undefined && tenantIdHeader !== null && tenantIdHeader !== '' ? parseInt(tenantIdHeader) : 1;
   next();
 });
 
@@ -31,6 +32,82 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
   }
 });
 
+// Persistent JSON snapshot backup to survive cloud container resets
+function saveDatabaseSnapshot() {
+  db.all('SELECT * FROM tenants', [], (terr, tenants) => {
+    if (terr) return;
+    db.all('SELECT * FROM tenant_subscriptions', [], (subErr, subs) => {
+      db.all('SELECT * FROM tenant_licenses', [], (licErr, lics) => {
+        db.all('SELECT * FROM users', [], (uerr, users) => {
+          if (uerr) return;
+          const snapshot = {
+            timestamp: new Date().toISOString(),
+            tenants: tenants || [],
+            tenant_subscriptions: subs || [],
+            tenant_licenses: lics || [],
+            users: users || []
+          };
+          try {
+            fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2), 'utf8');
+          } catch (e) {
+            console.warn('Snapshot write failed:', e.message);
+          }
+        });
+      });
+    });
+  });
+}
+
+function restoreDatabaseSnapshotIfNeeded(callback) {
+  db.get('SELECT COUNT(*) as count FROM tenants', [], (err, row) => {
+    if (!err && row && row.count > 0) {
+      if (callback) callback();
+      return;
+    }
+    if (fs.existsSync(SNAPSHOT_PATH)) {
+      try {
+        const raw = fs.readFileSync(SNAPSHOT_PATH, 'utf8');
+        const data = JSON.parse(raw);
+        console.log(`[Persistence] Restoring database snapshot: ${data.tenants?.length || 0} tenants, ${data.users?.length || 0} users...`);
+        db.serialize(() => {
+          if (data.tenants && data.tenants.length > 0) {
+            const stmt = db.prepare('INSERT OR REPLACE INTO tenants (id, company_name, slug, subscription_tier, created_at, subdomain_or_code, seat_quota, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+            data.tenants.forEach(t => stmt.run(t.id, t.company_name, t.slug, t.subscription_tier, t.created_at, t.subdomain_or_code || t.slug, t.seat_quota || 20, t.status || 'active'));
+            stmt.finalize();
+          }
+          if (data.tenant_subscriptions && data.tenant_subscriptions.length > 0) {
+            const stmt = db.prepare('INSERT OR REPLACE INTO tenant_subscriptions (id, tenant_id, plan_tier, max_mr_seats, max_am_seats, monthly_price, billing_status, next_billing_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+            data.tenant_subscriptions.forEach(s => stmt.run(s.id, s.tenant_id, s.plan_tier, s.max_mr_seats, s.max_am_seats, s.monthly_price, s.billing_status, s.next_billing_date));
+            stmt.finalize();
+          }
+          if (data.tenant_licenses && data.tenant_licenses.length > 0) {
+            const stmt = db.prepare('INSERT OR REPLACE INTO tenant_licenses (id, tenant_id, e_detailing_clm, secondary_sales, sample_tracking, geo_fencing, tour_planning, max_mr_seats, max_am_seats, max_cdn_storage_gb, status) VALUES (?, 1, 1, 1, 1, 1, ?, 5, 100, ?)');
+            data.tenant_licenses.forEach(l => stmt.run(l.id, l.tenant_id, l.max_mr_seats || 20, l.status || 'ACTIVE'));
+            stmt.finalize();
+          }
+          if (data.users && data.users.length > 0) {
+            const stmt = db.prepare('INSERT OR REPLACE INTO users (id, tenant_id, name, full_name, email, password, password_hash, role, therapeutic_division, headquarters_base, territory_code, reporting_manager_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            data.users.forEach(u => stmt.run(
+              u.id, u.tenant_id, u.name, u.full_name || u.name, u.email,
+              u.password || 'repflow@123', u.password_hash || u.password || 'repflow@123',
+              u.role, u.therapeutic_division || 'Cardio-Diab',
+              u.headquarters_base || u.territory_code || 'HQ-GLOBAL',
+              u.territory_code || 'HQ-GLOBAL', u.reporting_manager_id,
+              u.is_active !== undefined ? u.is_active : 1, u.created_at
+            ));
+            stmt.finalize();
+          }
+          if (callback) callback();
+        });
+        return;
+      } catch (e) {
+        console.warn('Failed restoring snapshot:', e.message);
+      }
+    }
+    if (callback) callback();
+  });
+}
+
 function initDatabaseSchema() {
   db.serialize(() => {
     // 1. Tenants Table & Subscriptions
@@ -38,36 +115,52 @@ function initDatabaseSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_name TEXT NOT NULL,
       slug TEXT UNIQUE NOT NULL,
-      subscription_tier TEXT DEFAULT 'ENTERPRISE',
+      subdomain_or_code TEXT,
+      seat_quota INTEGER DEFAULT 20,
+      status TEXT DEFAULT 'active',
+      subscription_tier TEXT DEFAULT 'PILOT_3_MONTHS',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+
+    db.run("ALTER TABLE tenants ADD COLUMN subdomain_or_code TEXT", (err) => {});
+    db.run("ALTER TABLE tenants ADD COLUMN seat_quota INTEGER DEFAULT 20", (err) => {});
+    db.run("ALTER TABLE tenants ADD COLUMN status TEXT DEFAULT 'active'", (err) => {});
 
     db.run(`CREATE TABLE IF NOT EXISTS tenant_subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL,
-      plan_tier TEXT DEFAULT 'ENTERPRISE',
-      max_mr_seats INTEGER DEFAULT 50,
-      max_am_seats INTEGER DEFAULT 10,
-      monthly_price REAL DEFAULT 49999,
+      plan_tier TEXT DEFAULT 'PILOT_3_MONTHS',
+      max_mr_seats INTEGER DEFAULT 20,
+      max_am_seats INTEGER DEFAULT 5,
+      monthly_price REAL DEFAULT 0,
       billing_status TEXT DEFAULT 'ACTIVE',
       next_billing_date TEXT,
       FOREIGN KEY(tenant_id) REFERENCES tenants(id)
     )`);
 
-    // 2. Users Table (Multi-tenant friendly, without global unique email block)
+    // 2. Users Table
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER NOT NULL DEFAULT 1,
+      tenant_id INTEGER,
       name TEXT NOT NULL,
+      full_name TEXT,
       email TEXT NOT NULL,
+      password TEXT DEFAULT 'repflow@123',
+      password_hash TEXT DEFAULT 'repflow@123',
       role TEXT NOT NULL,
+      therapeutic_division TEXT DEFAULT 'Cardio-Diab',
+      headquarters_base TEXT DEFAULT 'HQ-GLOBAL',
+      territory_code TEXT DEFAULT 'HQ-GLOBAL',
       reporting_manager_id INTEGER,
-      territory_code TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      password TEXT DEFAULT 'repflow@123'
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    db.run("ALTER TABLE users ADD COLUMN password TEXT DEFAULT 'repflow@123'", (err) => {});
+    db.run("ALTER TABLE users ADD COLUMN full_name TEXT", (err) => {});
+    db.run("ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT 'repflow@123'", (err) => {});
+    db.run("ALTER TABLE users ADD COLUMN therapeutic_division TEXT DEFAULT 'Cardio-Diab'", (err) => {});
+    db.run("ALTER TABLE users ADD COLUMN headquarters_base TEXT DEFAULT 'HQ-GLOBAL'", (err) => {});
+    db.run("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1", (err) => {});
 
     // Ensure users table allows multi-tenant email configurations (no restrictive unique constraint)
     db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
@@ -439,46 +532,29 @@ function initDatabaseSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    seedInitialData();
+    restoreDatabaseSnapshotIfNeeded(() => {
+      seedInitialData();
+    });
   });
 }
 
 function seedInitialData() {
-  console.log('Checking & seeding root System Admin account (admin@repflow.io)...');
+  console.log('Verifying root System Admin account (admin@repflow.io)...');
   db.serialize(() => {
-    // Purge legacy mock data if SUPER_ADMIN account is missing
     db.get("SELECT * FROM users WHERE LOWER(email) = 'admin@repflow.io'", (err, adminUser) => {
       if (!adminUser) {
-        console.log('Enforcing Clean Slate: Purging mock demo data & seeding root System Admin account...');
-        db.run("DELETE FROM tenants");
-        db.run("DELETE FROM tenant_subscriptions");
-        db.run("DELETE FROM tenant_licenses");
-        db.run("DELETE FROM users");
-        db.run("DELETE FROM doctors");
-        db.run("DELETE FROM chemists");
-        db.run("DELETE FROM distributors");
-        db.run("DELETE FROM hcp_approval_queue");
-        db.run("DELETE FROM product_catalog");
-        db.run("DELETE FROM clm_presentations");
-        db.run("DELETE FROM field_governance");
-        db.run("DELETE FROM virtual_sample_bags");
-        db.run("DELETE FROM gift_distributions");
-        db.run("DELETE FROM mtp_headers");
-        db.run("DELETE FROM mtp_days");
-        db.run("DELETE FROM expense_claims");
-        db.run("DELETE FROM leave_requests");
-
-        // Seed root System Admin account
-        db.run("DELETE FROM users WHERE id = 1 OR LOWER(email) = 'admin@repflow.io'", () => {
-          db.run("INSERT INTO users (id, tenant_id, name, email, password, role, territory_code) VALUES (1, 0, 'SaaS System Admin', 'admin@repflow.io', 'RepFlow@SuperAdmin2026!', 'SUPER_ADMIN', 'PLATFORM-ROOT')", (ierr) => {
-            if (ierr) console.error('Error seeding root admin:', ierr.message);
-            else console.log('Successfully seeded root System Admin: admin@repflow.io | RepFlow@SuperAdmin2026!');
-          });
+        db.run(`INSERT INTO users (id, tenant_id, name, full_name, email, password, password_hash, role, territory_code, headquarters_base, therapeutic_division, is_active) 
+                VALUES (1, 0, 'SaaS System Admin', 'SaaS System Admin', 'admin@repflow.io', 'RepFlow@SuperAdmin2026!', 'RepFlow@SuperAdmin2026!', 'SUPER_ADMIN', 'PLATFORM-ROOT', 'HQ-GLOBAL', 'Cardio-Diab', 1)`, (ierr) => {
+          if (ierr) console.error('Error seeding root admin:', ierr.message);
+          else {
+            console.log('Successfully seeded root System Admin: admin@repflow.io | RepFlow@SuperAdmin2026!');
+            saveDatabaseSnapshot();
+          }
         });
       } else {
-        // Guarantee password and role are synchronized
-        db.run("UPDATE users SET password = 'RepFlow@SuperAdmin2026!', role = 'SUPER_ADMIN' WHERE LOWER(email) = 'admin@repflow.io'", (uerr) => {
+        db.run("UPDATE users SET password = 'RepFlow@SuperAdmin2026!', password_hash = 'RepFlow@SuperAdmin2026!', role = 'SUPER_ADMIN', is_active = 1 WHERE LOWER(email) = 'admin@repflow.io'", (uerr) => {
           console.log('System Admin account credentials verified: admin@repflow.io | RepFlow@SuperAdmin2026!');
+          saveDatabaseSnapshot();
         });
       }
     });
@@ -1085,8 +1161,8 @@ const handleOnboardTenant = (req, res) => {
   const finalSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
   const seatsQuota = parseInt(max_mr_seats) || 20;
 
-  db.run(`INSERT INTO tenants (company_name, slug, subscription_tier) VALUES (?, ?, ?)`,
-    [company_name, finalSlug, plan_tier || 'PILOT_3_MONTHS'],
+  db.run(`INSERT INTO tenants (company_name, slug, subdomain_or_code, seat_quota, status, subscription_tier) VALUES (?, ?, ?, ?, 'active', ?)`,
+    [company_name, finalSlug, finalSlug, seatsQuota, plan_tier || 'PILOT_3_MONTHS'],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const tenantId = this.lastID;
@@ -1100,23 +1176,27 @@ const handleOnboardTenant = (req, res) => {
             [tenantId, seatsQuota]);
 
           // 3. Generate and Insert Primary Company Admin User Credentials
-          const admName = admin_name || `${company_name} HO Admin`;
+          const admName = (admin_name || `${company_name} HO Admin`).trim();
           const admEmail = (admin_email || `admin@${baseSlug}.com`).trim().toLowerCase();
           const admPass = admin_password || `PilotPharma@2026`;
 
-          db.run(`INSERT INTO users (tenant_id, name, email, password, role, reporting_manager_id, territory_code) VALUES (?, ?, ?, ?, 'COMPANY_ADMIN', NULL, 'HQ-GLOBAL')`,
-            [tenantId, admName, admEmail, admPass],
+          db.run(`INSERT INTO users (tenant_id, name, full_name, email, password, password_hash, role, reporting_manager_id, territory_code, headquarters_base, therapeutic_division, is_active) VALUES (?, ?, ?, ?, ?, ?, 'COMPANY_ADMIN', NULL, 'HQ-GLOBAL', 'HQ-GLOBAL', 'Cardio-Diab', 1)`,
+            [tenantId, admName, admName, admEmail, admPass, admPass],
             (uerr) => {
+              saveDatabaseSnapshot();
               res.json({
                 success: true,
                 tenant_id: tenantId,
                 company_name: company_name,
                 slug: finalSlug,
+                subdomain_or_code: finalSlug,
                 max_seats: seatsQuota,
+                seat_quota: seatsQuota,
                 admin_name: admName,
                 admin_email: admEmail,
                 admin_password: admPass,
                 plan_tier: plan_tier || 'PILOT_3_MONTHS',
+                status: 'active',
                 message: `Successfully provisioned "${company_name}" (${seatsQuota}-Seat Quota)! Company Admin created: ${admEmail}`
               });
             }
@@ -1131,44 +1211,70 @@ app.post('/api/superadmin/tenants', handleOnboardTenant);
 app.post('/api/system-admin/tenants/onboard', handleOnboardTenant);
 
 app.get('/api/tenants', (req, res) => {
-  db.all('SELECT * FROM tenants ORDER BY id ASC', [], (err, rows) => {
+  db.all(`SELECT t.*, COALESCE(t.subdomain_or_code, t.slug) as subdomain,
+          COALESCE(t.seat_quota, s.max_mr_seats, 20) as seat_quota,
+          COALESCE(t.seat_quota, s.max_mr_seats, 20) as max_seats,
+          COALESCE(s.plan_tier, t.subscription_tier, 'PILOT_3_MONTHS') as tier,
+          COALESCE(t.status, 'active') as status,
+          (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND COALESCE(u.is_active, 1) = 1 AND u.role != 'SUPER_ADMIN') as active_seats,
+          (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND COALESCE(u.is_active, 1) = 1 AND u.role = 'MR') as mr_seat_count
+          FROM tenants t 
+          LEFT JOIN tenant_subscriptions s ON t.id = s.tenant_id 
+          ORDER BY t.id ASC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    res.json(rows || []);
   });
 });
 
 // Team & Hierarchy Management APIs
 app.get('/api/users', (req, res) => {
-  db.all(`SELECT u.id, u.tenant_id, u.name, u.email, COALESCE(u.password, 'password123') as password, u.role, u.territory_code, u.reporting_manager_id,
+  const tenantId = req.tenant_id;
+  db.all(`SELECT u.id, u.tenant_id, u.name, COALESCE(u.full_name, u.name) as full_name,
+                 u.email, COALESCE(u.password, u.password_hash, 'repflow@123') as password,
+                 u.role, 
+                 COALESCE(u.therapeutic_division, 'Cardio-Diab') as therapeutic_division,
+                 COALESCE(u.territory_code, u.headquarters_base, 'HQ-GLOBAL') as territory_code,
+                 COALESCE(u.headquarters_base, u.territory_code, 'HQ-GLOBAL') as headquarters_base,
+                 COALESCE(u.headquarters_base, u.territory_code, 'HQ-GLOBAL') as territory,
+                 u.reporting_manager_id, 
+                 COALESCE(u.is_active, 1) as is_active,
+                 u.created_at,
                  m.name as reporting_manager_name, m.role as reporting_manager_role
           FROM users u
           LEFT JOIN users m ON u.reporting_manager_id = m.id
-          WHERE u.tenant_id = ?
+          WHERE u.tenant_id = ? AND COALESCE(u.is_active, 1) = 1
           ORDER BY 
             CASE u.role 
+              WHEN 'SUPER_ADMIN' THEN 1
               WHEN 'SUPERADMIN' THEN 1
+              WHEN 'COMPANY_ADMIN' THEN 2
               WHEN 'HO' THEN 2
               WHEN 'ZSM' THEN 3
               WHEN 'RM' THEN 4
               WHEN 'AM' THEN 5
               WHEN 'MR' THEN 6
               ELSE 7 
-            END, u.id ASC`, [req.tenant_id], (err, rows) => {
+            END, u.id ASC`, [tenantId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    res.json(rows || []);
   });
 });
 
 app.post('/api/users', (req, res) => {
-  const { name, email, password, role, reporting_manager_id, territory_code } = req.body;
-  if (!name || !email || !role) return res.status(400).json({ error: 'Name, Email and Role are required' });
+  const { name, full_name, email, password, role, reporting_manager_id, territory_code, headquarters_base, therapeutic_division } = req.body;
+  const userName = (full_name || name || '').trim();
+  const userEmail = (email || '').trim().toLowerCase();
+  if (!userName || !userEmail || !role) return res.status(400).json({ error: 'Name, Email and Role are required' });
 
   const tenantId = req.tenant_id || 1;
 
   // Enforce Tenant Seat Limit (20 Seats for Commercial Pilot)
-  db.get('SELECT COUNT(*) as count FROM users WHERE tenant_id = ?', [tenantId], (cerr, crow) => {
+  db.get('SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND COALESCE(is_active, 1) = 1 AND role != "SUPER_ADMIN"', [tenantId], (cerr, crow) => {
     const activeCount = crow ? crow.count : 0;
-    db.get('SELECT COALESCE(max_mr_seats, 20) as max_seats FROM tenant_subscriptions WHERE tenant_id = ?', [tenantId], (serr, srow) => {
+    db.get(`SELECT COALESCE(t.seat_quota, s.max_mr_seats, 20) as max_seats 
+            FROM tenants t 
+            LEFT JOIN tenant_subscriptions s ON t.id = s.tenant_id 
+            WHERE t.id = ?`, [tenantId], (serr, srow) => {
       const maxSeats = srow ? srow.max_seats : 20;
 
       if (activeCount >= maxSeats && role !== 'SUPER_ADMIN') {
@@ -1177,19 +1283,39 @@ app.post('/api/users', (req, res) => {
         });
       }
 
-      db.run(`INSERT INTO users (tenant_id, name, email, password, role, reporting_manager_id, territory_code)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [tenantId, name.trim(), email.trim().toLowerCase(), password || 'repflow@123', role, reporting_manager_id ? parseInt(reporting_manager_id) : null, territory_code ? territory_code.trim() : 'HQ-GLOBAL'],
+      const territory = (territory_code || headquarters_base || 'HQ-GLOBAL').trim();
+      const div = (therapeutic_division || 'Cardio-Diab').trim();
+      const pass = password || 'repflow@123';
+      const mgrId = reporting_manager_id ? parseInt(reporting_manager_id) : null;
+
+      db.run(`INSERT INTO users (tenant_id, name, full_name, email, password, password_hash, role, reporting_manager_id, territory_code, headquarters_base, therapeutic_division, is_active)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [tenantId, userName, userName, userEmail, pass, pass, role, mgrId, territory, territory, div],
         function(err) {
           if (err) {
             console.error('Error inserting user:', err);
             return res.status(500).json({ error: err.message || 'Failed to create team member' });
           }
+          const newUserId = this.lastID;
+          saveDatabaseSnapshot();
           res.json({
-            id: this.lastID,
+            id: newUserId,
             active_seats: activeCount + 1,
             max_seats: maxSeats,
-            message: `Successfully created ${role} user "${name}" (${email})! Active Seats: ${activeCount + 1}/${maxSeats}`
+            user: {
+              id: newUserId,
+              tenant_id: tenantId,
+              name: userName,
+              full_name: userName,
+              email: userEmail,
+              role,
+              reporting_manager_id: mgrId,
+              territory_code: territory,
+              headquarters_base: territory,
+              therapeutic_division: div,
+              is_active: 1
+            },
+            message: `Successfully created ${role} user "${userName}" (${userEmail})! Active Seats: ${activeCount + 1}/${maxSeats}`
           });
         }
       );
@@ -1201,9 +1327,11 @@ app.delete('/api/users/:id', (req, res) => {
   const userId = parseInt(req.params.id);
   db.run('DELETE FROM users WHERE id = ? AND tenant_id = ?', [userId, req.tenant_id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    saveDatabaseSnapshot();
     res.json({ message: 'Team member removed successfully' });
   });
 });
+
 
 app.post('/api/notifications/trigger', (req, res) => {
   res.json({ message: 'Web Push Notification alert sent.' });

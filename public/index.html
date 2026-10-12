@@ -466,14 +466,53 @@
     <!-- 1. Company Admin: Hierarchy & Territory Management (/tenant-admin/territories) -->
     <section id="tab-tenant-admin-territories" class="tab-content">
       <div class="panel-card">
-        <div class="panel-header">
+        <div class="panel-header" style="flex-wrap:wrap; gap:12px;">
           <div>
-            <h2 class="panel-title">🏢 Enterprise Hierarchy & Territory Command Center</h2>
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:4px; flex-wrap:wrap;">
+              <h2 class="panel-title" style="margin:0;">🏢 Enterprise Hierarchy & Territory Command Center</h2>
+              <span class="tag-badge" style="background:rgba(0, 245, 212, 0.15); color:var(--accent-teal); border:1px solid var(--accent-teal); font-size:0.85rem; padding:4px 10px; font-weight:700;">
+                <span id="tenantAdminSeatsCount">0 / 20 Seats Active</span>
+              </span>
+            </div>
             <div style="font-size:0.85rem; color:var(--text-muted);">
               Manage Multi-Tier Field Force (NSM -> ZM -> RBM -> ABM -> MR) & Base Station Alignment
             </div>
           </div>
-          <button class="btn btn-primary" onclick="RepFlowApp.openCreateTeamMemberModal()">+ Add Staff Member</button>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-primary" onclick="RepFlowApp.openCreateTeamMemberModal()">+ Add Staff Member</button>
+          </div>
+        </div>
+
+        <!-- Seats and Role Distribution Cards -->
+        <div class="grid-cols-4" style="margin-bottom:20px;">
+          <div class="stat-card" style="border-left-color:var(--accent-teal);">
+            <div class="stat-icon">💺</div>
+            <div class="stat-info">
+              <h4>Seat Quota</h4>
+              <div class="stat-value" id="cardSeatQuotaDisplay">0 / 20 Seats Active</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+            <div class="stat-icon">👔</div>
+            <div class="stat-info">
+              <h4>Regional Managers (RM)</h4>
+              <div class="stat-value" id="countTenantRm">0 Active</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-amber);">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+              <h4>Area Managers (AM)</h4>
+              <div class="stat-value" id="countTenantAm">0 Active</div>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left-color:var(--accent-blue);">
+            <div class="stat-icon">💼</div>
+            <div class="stat-info">
+              <h4>Medical Reps (MR)</h4>
+              <div class="stat-value" id="countTenantMr">0 Active</div>
+            </div>
+          </div>
         </div>
         <div class="table-responsive">
           <table class="data-table">
@@ -1637,9 +1676,21 @@
           <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Each field rep must report to their respective senior in the hierarchy.</div>
         </div>
 
-        <div class="form-group">
-          <label>Assigned Territory / Headquarters Code</label>
-          <input type="text" id="teamUserTerritory" required placeholder="e.g. T-GREATER-KAILASH, A-SOUTH-DELHI, R-DELHI-NCR" class="form-control">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Therapeutic Division</label>
+            <select id="teamUserDivision" class="form-select">
+              <option value="Cardio-Diabetology">Cardio-Diabetology Division</option>
+              <option value="Gastro & Hepato">Gastro & Hepato Division</option>
+              <option value="Neuro-Care">Neuro-Care Division</option>
+              <option value="Ortho-Care">Ortho-Care Division</option>
+              <option value="Respiratory & Anti-Infectives">Respiratory & Anti-Infectives</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Assigned Territory / Headquarters Code</label>
+            <input type="text" id="teamUserTerritory" required placeholder="e.g. T-GREATER-KAILASH, A-SOUTH-DELHI, R-DELHI-NCR" class="form-control">
+          </div>
         </div>
 
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
