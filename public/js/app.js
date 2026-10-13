@@ -41,11 +41,12 @@ const RepFlowApp = (() => {
     'system-admin-infrastructure': '⚡ System Admin: Infrastructure & Logs',
 
     // Company Admin Control Panel (/tenant-admin)
-    'tenant-admin-territories': '🏢 Company Admin: Hierarchy & Territories',
-    'tenant-admin-hcp': '👨‍⚕️ Company Admin: HCP Doctor Master',
-    'tenant-admin-products': '💊 Company Admin: Product SKU & CLM',
-    'tenant-admin-governance': '⚖️ Company Admin: Field Governance',
-    'tenant-admin-reports': '📊 Company Admin: Analytics & Reports',
+    'company-admin-home': '🏠 Admin Home',
+    'tenant-admin-territories': '🏢 Hierarchy & Team',
+    'tenant-admin-hcp': '👨‍⚕️ Doctor Master',
+    'tenant-admin-products': '💊 Products & CLM',
+    'tenant-admin-governance': '⚖️ Field Governance',
+    'tenant-admin-reports': '📊 Analytics & Reports',
 
     // Field Operations & Manager Desks
     'team-hierarchy': '👥 Team & Hierarchy',
@@ -234,6 +235,22 @@ const RepFlowApp = (() => {
     const tenantTitle = currentUser.role === 'SUPER_ADMIN' ? '🛡️ SaaS Platform Root' : `🏢 ${currentUser.tenant_name || 'Enterprise Client'}`;
     if (tenantBadgeEl) tenantBadgeEl.innerText = tenantTitle;
 
+    // Update workspace badge based on role
+    const workspaceBadge = document.getElementById('currentWorkspaceBadge');
+    if (workspaceBadge) {
+      if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SYSTEM_ADMIN') {
+        workspaceBadge.innerHTML = '🛡️ SaaS System Admin Workspace';
+      } else if (currentUser.role === 'COMPANY_ADMIN' || currentUser.role === 'HO') {
+        workspaceBadge.innerHTML = `🏢 Company Admin Workspace`;
+      } else if (currentUser.role === 'RM') {
+        workspaceBadge.innerHTML = '👔 Regional Manager Workspace';
+      } else if (currentUser.role === 'AM') {
+        workspaceBadge.innerHTML = '👥 Area Manager Workspace';
+      } else {
+        workspaceBadge.innerHTML = '💼 Field Operations Workspace';
+      }
+    }
+
     // Define Allowed Navigation Tabs Driven Strictly by Authenticated Role
     let allowedTabs = [];
     let initialTab = 'mr-dashboard';
@@ -242,8 +259,8 @@ const RepFlowApp = (() => {
       allowedTabs = ['system-admin-tenants', 'system-admin-licenses', 'system-admin-templates', 'system-admin-infrastructure'];
       initialTab = 'system-admin-tenants';
     } else if (currentUser.role === 'COMPANY_ADMIN' || currentUser.role === 'HO') {
-      allowedTabs = ['tenant-admin-territories', 'tenant-admin-hcp', 'tenant-admin-products', 'tenant-admin-governance', 'tenant-admin-reports', 'team-hierarchy'];
-      initialTab = 'tenant-admin-territories';
+      allowedTabs = ['company-admin-home', 'tenant-admin-territories', 'tenant-admin-hcp', 'tenant-admin-products', 'tenant-admin-governance', 'tenant-admin-reports'];
+      initialTab = 'company-admin-home';
     } else if (currentUser.role === 'ZSM') {
       allowedTabs = ['zsm-portal', 'team-hierarchy', 'ho-yield-analytics', 'academic-roi', 'master'];
       initialTab = 'zsm-portal';
@@ -313,7 +330,7 @@ const RepFlowApp = (() => {
         if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SYSTEM_ADMIN') {
           localStorage.setItem('repflow_active_tab', 'system-admin-tenants');
         } else if (currentUser.role === 'COMPANY_ADMIN' || currentUser.role === 'HO') {
-          localStorage.setItem('repflow_active_tab', 'tenant-admin-territories');
+          localStorage.setItem('repflow_active_tab', 'company-admin-home');
         }
 
         try {
@@ -524,6 +541,7 @@ const RepFlowApp = (() => {
     if (tabId === 'system-admin-infrastructure') loadSystemAdminInfrastructure();
 
     // Company Admin Control Panel Tabs
+    if (tabId === 'company-admin-home') loadCompanyAdminHome();
     if (tabId === 'tenant-admin-territories') loadTenantAdminTerritories();
     if (tabId === 'tenant-admin-hcp') loadTenantAdminHcp();
     if (tabId === 'tenant-admin-products') loadTenantAdminProducts();
@@ -695,6 +713,160 @@ const RepFlowApp = (() => {
     } catch (e) {
       console.warn('Failed loading super-admin data', e);
     }
+  }
+
+  // -------------------------------------------------------------
+  // Company Admin Home Dashboard
+  // -------------------------------------------------------------
+  async function loadCompanyAdminHome() {
+    // Fetch live users for this tenant
+    let users = currentTenantUsersCache;
+    try {
+      const res = await fetch('/api/users', {
+        headers: { 'X-Tenant-ID': activeTenantId, ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}) }
+      });
+      if (res.ok) {
+        users = await res.json();
+        currentTenantUsersCache = users;
+      }
+    } catch(e) { console.warn('Using cached users for admin home'); }
+
+    const rmCount  = users.filter(u => u.role === 'RM').length;
+    const amCount  = users.filter(u => u.role === 'AM').length;
+    const mrCount  = users.filter(u => u.role === 'MR').length;
+    const total    = rmCount + amCount + mrCount;
+    const tenantObj = allTenantsCache.find(t => t.id === activeTenantId);
+    const tenantName = tenantObj ? tenantObj.company_name : (currentUser.tenant_name || 'Your Company');
+    const maxSeats = tenantObj ? tenantObj.max_mr_seats : 20;
+
+    const el = document.getElementById('tab-company-admin-home');
+    if (!el) return;
+
+    el.innerHTML = `
+      <!-- Welcome Banner -->
+      <div class="panel-card" style="background: linear-gradient(135deg, #0d1b2a 0%, #0f3460 60%, #1a1a2e 100%); border: 1px solid rgba(0,180,216,0.3); margin-bottom: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div>
+            <div style="font-size:0.8rem; color:var(--accent-teal); font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">🏢 COMPANY ADMIN PANEL</div>
+            <h2 style="font-size:1.6rem; font-weight:800; color:#ffffff; margin:0 0 6px 0;">Welcome, ${currentUser.name || 'Admin'}</h2>
+            <p style="color:#94a3b8; font-size:0.9rem; margin:0;">
+              Managing <strong style="color:var(--accent-teal);">${tenantName}</strong> &nbsp;|&nbsp; 
+              ${total} / ${maxSeats} Seats Active &nbsp;|&nbsp;
+              <span style="color:var(--accent-emerald);">● Active Session</span>
+            </p>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="RepFlowApp.navigateToTab('tenant-admin-territories')" style="padding:10px 20px;">
+              ➕ Add Staff Member
+            </button>
+            <button class="btn btn-secondary" onclick="RepFlowApp.navigateToTab('tenant-admin-reports')" style="padding:10px 20px;">
+              📊 View Reports
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Key Stats -->
+      <div class="grid-cols-4" style="margin-bottom:24px;">
+        <div class="stat-card" style="border-left-color:var(--accent-teal);">
+          <div class="stat-icon" style="color:var(--accent-teal); background:rgba(0,245,212,0.1);">💺</div>
+          <div class="stat-info">
+            <h4>Seat Utilization</h4>
+            <div class="stat-value">${total} / ${maxSeats}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Seats Active</div>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent-emerald);">
+          <div class="stat-icon" style="color:var(--accent-emerald-text); background:var(--accent-emerald-bg);">👔</div>
+          <div class="stat-info">
+            <h4>Regional Managers</h4>
+            <div class="stat-value">${rmCount}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Active RMs</div>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent-amber);">
+          <div class="stat-icon" style="color:var(--accent-gold); background:var(--accent-gold-bg);">👥</div>
+          <div class="stat-info">
+            <h4>Area Managers</h4>
+            <div class="stat-value">${amCount}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Active AMs</div>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent-blue);">
+          <div class="stat-icon" style="color:var(--accent-blue); background:#e0f2fe;">💼</div>
+          <div class="stat-info">
+            <h4>Medical Reps</h4>
+            <div class="stat-value">${mrCount}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Active MRs</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Navigation -->
+      <div class="panel-card">
+        <h3 style="font-size:1.1rem; font-weight:700; color:var(--text-main); margin-bottom:16px;">⚡ Quick Actions</h3>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+          <button class="btn btn-secondary" style="padding:16px; text-align:left; height:auto; display:flex; flex-direction:column; gap:4px;" onclick="RepFlowApp.navigateToTab('tenant-admin-territories')">
+            <span style="font-size:1.3rem;">🏢</span>
+            <strong>Manage Team Hierarchy</strong>
+            <span style="font-size:0.78rem; color:var(--text-muted); font-weight:400;">Add, edit or remove staff members</span>
+          </button>
+          <button class="btn btn-secondary" style="padding:16px; text-align:left; height:auto; display:flex; flex-direction:column; gap:4px;" onclick="RepFlowApp.navigateToTab('tenant-admin-hcp')">
+            <span style="font-size:1.3rem;">👨‍⚕️</span>
+            <strong>Doctor Master</strong>
+            <span style="font-size:0.78rem; color:var(--text-muted); font-weight:400;">Manage doctor & HCP database</span>
+          </button>
+          <button class="btn btn-secondary" style="padding:16px; text-align:left; height:auto; display:flex; flex-direction:column; gap:4px;" onclick="RepFlowApp.navigateToTab('tenant-admin-products')">
+            <span style="font-size:1.3rem;">💊</span>
+            <strong>Products & CLM</strong>
+            <span style="font-size:0.78rem; color:var(--text-muted); font-weight:400;">Manage product catalog & visual aids</span>
+          </button>
+          <button class="btn btn-secondary" style="padding:16px; text-align:left; height:auto; display:flex; flex-direction:column; gap:4px;" onclick="RepFlowApp.navigateToTab('tenant-admin-governance')">
+            <span style="font-size:1.3rem;">⚖️</span>
+            <strong>Field Governance</strong>
+            <span style="font-size:0.78rem; color:var(--text-muted); font-weight:400;">GPS rules, DCR policy & dispatch</span>
+          </button>
+          <button class="btn btn-secondary" style="padding:16px; text-align:left; height:auto; display:flex; flex-direction:column; gap:4px;" onclick="RepFlowApp.navigateToTab('tenant-admin-reports')">
+            <span style="font-size:1.3rem;">📊</span>
+            <strong>Analytics & Reports</strong>
+            <span style="font-size:0.78rem; color:var(--text-muted); font-weight:400;">Coverage, performance & KPIs</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Team Snapshot -->
+      ${users.filter(u => ['RM','AM','MR'].includes(u.role)).length > 0 ? `
+      <div class="panel-card" style="margin-top:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="font-size:1rem; font-weight:700; color:var(--text-main);">👥 Your Team at a Glance</h3>
+          <button class="btn btn-secondary" style="padding:4px 12px; font-size:0.8rem;" onclick="RepFlowApp.navigateToTab('tenant-admin-territories')">View Full Hierarchy →</button>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Role</th><th>Territory</th><th>Reports To</th></tr></thead>
+            <tbody>
+              ${users.filter(u => ['RM','AM','MR'].includes(u.role)).slice(0, 8).map(u => `
+                <tr>
+                  <td><strong>${u.name}</strong></td>
+                  <td><span class="tag-badge" style="${u.role==='RM'?'background:var(--accent-emerald);color:#04101e;':u.role==='AM'?'background:var(--accent-amber);color:#04101e;':'background:rgba(255,255,255,0.1);color:white;'}">${u.role}</span></td>
+                  <td><code>${u.territory_code || 'HQ'}</code></td>
+                  <td>${u.reporting_manager_name ? `<strong>${u.reporting_manager_name}</strong>` : '<span style="color:var(--text-dim);">Top Level</span>'}</td>
+                </tr>
+              `).join('')}
+              ${users.filter(u => ['RM','AM','MR'].includes(u.role)).length > 8 ? `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.82rem; padding:10px;">...and ${users.filter(u => ['RM','AM','MR'].includes(u.role)).length - 8} more. <a href="javascript:void(0)" onclick="RepFlowApp.navigateToTab('tenant-admin-territories')" style="color:var(--accent-teal);">View all →</a></td></tr>` : ''}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      ` : `
+      <div class="panel-card" style="margin-top:20px; text-align:center; padding:40px;">
+        <div style="font-size:3rem; margin-bottom:12px;">🏢</div>
+        <h3 style="color:var(--text-main); margin-bottom:8px;">No Team Members Yet</h3>
+        <p style="color:var(--text-muted); margin-bottom:20px;">Start by adding your first Regional Manager to build your field force hierarchy.</p>
+        <button class="btn btn-primary" onclick="RepFlowApp.navigateToTab('tenant-admin-territories')">+ Add First Team Member</button>
+      </div>
+      `}
+    `;
   }
 
   // -------------------------------------------------------------
@@ -2916,6 +3088,7 @@ const RepFlowApp = (() => {
     loadTenantAdminReports,
     generateExecutiveReport,
     exportTableToCSV,
+    loadCompanyAdminHome,
     showToast,
     refreshActiveTabData
   };
