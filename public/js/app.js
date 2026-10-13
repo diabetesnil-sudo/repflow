@@ -737,7 +737,7 @@ const RepFlowApp = (() => {
     const total    = rmCount + amCount + mrCount;
     const tenantObj = allTenantsCache.find(t => t.id === activeTenantId);
     const tenantName = tenantObj ? tenantObj.company_name : (currentUser.tenant_name || 'Your Company');
-    const maxSeats = tenantObj ? tenantObj.max_mr_seats : 20;
+    const maxSeats = tenantObj ? (tenantObj.max_mr_seats || tenantObj.seat_quota || 20) : 20;
 
     const el = document.getElementById('tab-company-admin-home');
     if (!el) return;
